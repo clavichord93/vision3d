@@ -1,0 +1,25 @@
+# exclude package building files
+build
+vision3d.egg-info
+vision3d/ext.cpython-37m-x86_64-linux-gnu.so
+vision3d/dist
+**/__pycache__
+.idea
+
+# exclude project files
+output
+experiments/*
+vision3d/datasets/stanford3d.py
+vision3d/modules/interpcnn
+
+# include project files
+!experiments/pointnet.modelnet40.resize+jitter.sgd.smooth
+!experiments/pointnet.modelnet40.resize+jitter.adam.tnet.smooth
+!experiments/pointnet.shapenetpart.jitter.sgd.tnet.one_hot.smooth
+!experiments/pointnet2.modelnet40.resize+jitter.sgd.ssg.smooth
+!experiments/pointnet2.modelnet40.resize+jitter.sgd.msg.smooth
+!experiments/pointnet2.shapenetpart.jitter.sgd.ssg.one_hot.smooth
+!experiments/pointnet2.shapenetpart.jitter.sgd.msg.one_hot.smooth
+!experiments/dgcnn.modelnet40.resize+jitter.sgd.max+avg.lrelu.smooth
+!experiments/dgcnn.shapenetpart.jitter.sgd.max+avg.lrelu.one_hot.smooth
+
