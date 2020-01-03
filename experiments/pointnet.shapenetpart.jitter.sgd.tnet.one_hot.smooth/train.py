@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-from vision3d.utils.metrics import AccuracyRecorderV2, PartMeanIoURecorder
+from vision3d.utils.metrics import OverallAccuracy, PartMeanIoU
 from vision3d.engine.engine import Engine
 from vision3d.modules.pointnet import PointNetLoss
 from dataset import train_data_loader
@@ -25,47 +25,45 @@ def make_parser():
 
 def main():
     parser = make_parser()
-    log_file = osp.join(config.PATH.logs_dir, 'train-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
+    log_file = osp.join(config.logs_dir, 'train-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
     with Engine(log_file=log_file, default_parser=parser, seed=config.seed) as engine:
         args = engine.args
 
-        data_loader = train_data_loader(config.PATH.data_root, args.split, config.TRAIN)
+        data_loader = train_data_loader(config, args.split)
 
-        model = create_model(config.DATA.num_class, config.DATA.num_part)
+        model = create_model(config.num_class, config.num_part)
         base_params = [parameter for name, parameter in model.named_parameters() if 'tnet' not in name]
         tnet_params = [parameter for name, parameter in model.named_parameters() if 'tnet' in name]
-        optimizer = optim.SGD([{'params': base_params, 'lr': config.OPTIMIZER.learning_rate},
-                               {'params': tnet_params, 'lr': config.OPTIMIZER.learning_rate * 0.1}],
-                              lr=config.OPTIMIZER.learning_rate,
-                              weight_decay=config.OPTIMIZER.weight_decay,
-                              momentum=config.OPTIMIZER.momentum)
+        optimizer = optim.SGD([{'params': base_params, 'lr': config.learning_rate},
+                               {'params': tnet_params, 'lr': config.learning_rate * 0.1}],
+                              lr=config.learning_rate,
+                              weight_decay=config.weight_decay,
+                              momentum=config.momentum)
         engine.register_state(model=model, optimizer=optimizer)
 
-        if engine.resume_training:
-            engine.resume_from_snapshot()
+        if engine.snapshot is not None:
+            engine.load_snapshot(engine.snapshot)
 
-        model = engine.get_model()
-        model.train()
-
-        loss_func = PointNetLoss(alpha=config.MODEL.alpha, eps=config.MODEL.eps).cuda()
-
+        last_epoch = engine.state.epoch
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,
-                                                         config.OPTIMIZER.max_epoch,
-                                                         eta_min=config.OPTIMIZER.eta_min,
-                                                         last_epoch=engine.state.epoch)
+                                                         config.max_epoch,
+                                                         eta_min=config.eta_min,
+                                                         last_epoch=last_epoch)
+
+        model = engine.get_cuda_model()
+        model.train()
+        loss_func = PointNetLoss(alpha=config.tnet_loss_alpha, eps=config.label_smoothing_eps).cuda()
 
         num_iter_per_epoch = len(data_loader)
 
-        for epoch in range(engine.state.epoch + 1, config.OPTIMIZER.max_epoch):
-            accuracy_recorder = AccuracyRecorderV2(config.DATA.num_part)
-            mean_iou_recorder = PartMeanIoURecorder(config.DATA.num_class,
-                                                    config.DATA.num_part,
-                                                    config.DATA.class_id_to_part_ids)
+        for epoch in range(last_epoch + 1, config.max_epoch):
+            oa_metric = OverallAccuracy(config.num_part)
+            miou_metric = PartMeanIoU(config.num_class, config.num_part, config.class_id_to_part_ids)
 
             start_time = time.time()
 
             for i, batch in enumerate(data_loader):
-                points, _, labels, class_ids = batch
+                points, labels, class_ids = batch
                 points = points.cuda()
                 labels = labels.cuda()
                 class_ids = class_ids.cuda()
@@ -83,21 +81,17 @@ def main():
                 loss.backward()
                 optimizer.step()
 
-                preds = outputs.argmax(dim=1)
-
-                batch_size = preds.shape[0]
-                preds = preds.detach().cpu().numpy()
+                preds = outputs.argmax(dim=1).detach().cpu().numpy()
                 labels = labels.cpu().numpy()
                 class_ids = class_ids.cpu().numpy()
-                accuracy_recorder.add_records(preds, labels)
-                for j in range(batch_size):
-                    mean_iou_recorder.add_records(preds[j], labels[j], class_ids[j])
+                oa_metric.add_results(preds, labels)
+                miou_metric.add_results(preds, labels, class_ids)
 
                 process_time = time.time() - start_time - prepare_time
 
                 if (i + 1) % args.steps == 0:
                     learning_rate = scheduler.get_lr()[0]
-                    message = 'Epoch {}/{}, '.format(epoch + 1, config.OPTIMIZER.max_epoch) + \
+                    message = 'Epoch {}/{}, '.format(epoch + 1, config.max_epoch) + \
                               'iter {}/{}, '.format(i + 1, num_iter_per_epoch) + \
                               'loss: {:.3f}, '.format(loss_val) + \
                               'cls_loss: {:.3f}, '.format(cls_loss_val) + \
@@ -111,15 +105,15 @@ def main():
                 start_time = time.time()
 
             message = 'Epoch {}, '.format(epoch) + \
-                      'acc: {:.3f}, '.format(accuracy_recorder.accuracy()) + \
-                      'mIoU (instance): {:.3f}, '.format(mean_iou_recorder.mean_iou_over_instance()) + \
-                      'mIoU (category): {:.3f}'.format(mean_iou_recorder.mean_iou_over_class())
+                      'acc: {:.3f}, '.format(oa_metric.accuracy()) + \
+                      'mIoU (instance): {:.3f}, '.format(miou_metric.instance_miou()) + \
+                      'mIoU (category): {:.3f}'.format(miou_metric.class_miou())
             engine.log(message)
 
             engine.register_state(epoch=epoch)
             scheduler.step()
 
-            snapshot = osp.join(config.PATH.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
+            snapshot = osp.join(config.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
             engine.save_snapshot(snapshot)
 
 

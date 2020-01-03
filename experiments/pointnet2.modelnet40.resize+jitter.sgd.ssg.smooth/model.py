@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from vision3d.modules.pointnet2 import SetAbstractionModule, GlobalAbstractionModule
-from vision3d.utils.pytorch_utils import create_fc_blocks
+from vision3d.utils.pytorch_utils import create_linear_blocks
 
 
 class PointNet2(nn.Module):
@@ -25,7 +25,7 @@ class PointNet2(nn.Module):
         self.g_sa_module = GlobalAbstractionModule(input_dim=259, output_dims=[256, 512, 1024])
 
         # classifier
-        layers = create_fc_blocks(1024, [512, 256], dropout_ratio=0.5)
+        layers = create_linear_blocks(1024, [512, 256], dropout=0.5)
         layers.append(('fc3', nn.Linear(256, num_class)))
         self.classifier = nn.Sequential(OrderedDict(layers))
 

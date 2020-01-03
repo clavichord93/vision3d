@@ -10,6 +10,19 @@ def reset_numpy_random_seed(worker_id):
     np.random.seed(seed)
 
 
+def _get_activation_fn(activation_fn, negative_slope=None):
+    if activation_fn == 'relu':
+        return nn.ReLU(inplace=True)
+    elif activation_fn == 'lrelu':
+        if negative_slope is None:
+            negative_slope = 0.01
+        return nn.LeakyReLU(negative_slope=negative_slope, inplace=True)
+    elif activation_fn == 'sigmoid':
+        return nn.Sigmoid()
+    else:
+        raise ValueError('Activation function {} is not supported'.format(activation_fn))
+
+
 class SmoothCrossEntropyLoss(nn.Module):
     def __init__(self, eps=0.2):
         super(SmoothCrossEntropyLoss, self).__init__()
@@ -38,12 +51,12 @@ class ConvUnit1d(nn.Sequential):
                  padding=0,
                  dilation=1,
                  groups=1,
-                 has_bn=True,
-                 has_relu=True,
-                 leaky_slope=None,
-                 dropout_ratio=None):
+                 batch_norm=True,
+                 activation='relu',
+                 negative_slope=None,
+                 dropout=None):
         super(ConvUnit1d, self).__init__()
-        bias = not has_bn
+        bias = not batch_norm
         self.add_module('conv',
                         nn.Conv1d(input_dim,
                                   output_dim,
@@ -53,15 +66,13 @@ class ConvUnit1d(nn.Sequential):
                                   dilation=dilation,
                                   groups=groups,
                                   bias=bias))
-        if has_bn:
+        if batch_norm:
             self.add_module('bn', nn.BatchNorm1d(output_dim))
-        if has_relu:
-            if leaky_slope is not None:
-                self.add_module('lrelu', nn.LeakyReLU(negative_slope=leaky_slope, inplace=True))
-            else:
-                self.add_module('relu', nn.ReLU(inplace=True))
-        if dropout_ratio is not None:
-            self.add_module('dp', nn.Dropout(dropout_ratio))
+        if activation is not None:
+            activation_fn = _get_activation_fn(activation, negative_slope=negative_slope)
+            self.add_module(activation, activation_fn)
+        if dropout is not None:
+            self.add_module('dp', nn.Dropout(dropout))
     
     def forward(self, inputs):
         return super(ConvUnit1d, self).forward(inputs)
@@ -76,12 +87,12 @@ class ConvUnit2d(nn.Sequential):
                  padding=0,
                  dilation=1,
                  groups=1,
-                 has_bn=True,
-                 has_relu=True,
-                 leaky_slope=None,
-                 dropout_ratio=None):
+                 batch_norm=True,
+                 activation='relu',
+                 negative_slope=None,
+                 dropout=None):
         super(ConvUnit2d, self).__init__()
-        bias = not has_bn
+        bias = not batch_norm
         self.add_module('conv',
                         nn.Conv2d(input_dim,
                                   output_dim,
@@ -91,37 +102,39 @@ class ConvUnit2d(nn.Sequential):
                                   dilation=dilation,
                                   groups=groups,
                                   bias=bias))
-        if has_bn:
+        if batch_norm:
             self.add_module('bn', nn.BatchNorm2d(output_dim))
-        if has_relu:
-            if leaky_slope is not None:
-                self.add_module('lrelu', nn.LeakyReLU(negative_slope=leaky_slope, inplace=True))
-            else:
-                self.add_module('relu', nn.ReLU(inplace=True))
-        if dropout_ratio is not None:
-            self.add_module('dp', nn.Dropout(dropout_ratio))
+        if activation is not None:
+            activation_fn = _get_activation_fn(activation, negative_slope=negative_slope)
+            self.add_module(activation, activation_fn)
+        if dropout is not None:
+            self.add_module('dp', nn.Dropout(dropout))
 
     def forward(self, inputs):
         return super(ConvUnit2d, self).forward(inputs)
 
 
-class FCUnit(nn.Sequential):
-    def __init__(self, input_dim, output_dim, has_bn=True, has_relu=True, leaky_slope=None, dropout_ratio=None):
-        super(FCUnit, self).__init__()
-        bias = not has_bn
+class LinearUnit(nn.Sequential):
+    def __init__(self,
+                 input_dim,
+                 output_dim,
+                 batch_norm=True,
+                 activation='relu',
+                 negative_slope=None,
+                 dropout=None):
+        super(LinearUnit, self).__init__()
+        bias = not batch_norm
         self.add_module('fc', nn.Linear(input_dim, output_dim, bias=bias))
-        if has_bn:
+        if batch_norm:
             self.add_module('bn', nn.BatchNorm1d(output_dim))
-        if has_relu:
-            if leaky_slope is not None:
-                self.add_module('lrelu', nn.LeakyReLU(negative_slope=leaky_slope, inplace=True))
-            else:
-                self.add_module('relu', nn.ReLU(inplace=True))
-        if dropout_ratio is not None:
-            self.add_module('dp', nn.Dropout(dropout_ratio))
+        if activation is not None:
+            activation_fn = _get_activation_fn(activation, negative_slope=negative_slope)
+            self.add_module(activation, activation_fn)
+        if dropout is not None:
+            self.add_module('dp', nn.Dropout(dropout))
 
     def forward(self, inputs):
-        return super(FCUnit, self).forward(inputs)
+        return super(LinearUnit, self).forward(inputs)
 
 
 def create_conv1d_blocks(input_dim,
@@ -131,10 +144,10 @@ def create_conv1d_blocks(input_dim,
                          padding=0,
                          dilation=1,
                          groups=1,
-                         has_bn=True,
-                         has_relu=True,
-                         leaky_slope=None,
-                         dropout_ratio=None):
+                         batch_norm=True,
+                         activation='relu',
+                         negative_slope=None,
+                         dropout=None):
     if isinstance(output_dims, int):
         output_dims = [output_dims]
     layers = []
@@ -148,10 +161,10 @@ def create_conv1d_blocks(input_dim,
                                   padding=padding,
                                   dilation=dilation,
                                   groups=groups,
-                                  has_bn=has_bn,
-                                  has_relu=has_relu,
-                                  leaky_slope=leaky_slope,
-                                  dropout_ratio=dropout_ratio)))
+                                  batch_norm=batch_norm,
+                                  activation=activation,
+                                  negative_slope=negative_slope,
+                                  dropout=dropout)))
         input_dim = output_dim
     return layers
 
@@ -163,10 +176,10 @@ def create_conv2d_blocks(input_dim,
                          padding=0,
                          dilation=1,
                          groups=1,
-                         has_bn=True,
-                         has_relu=True,
-                         leaky_slope=None,
-                         dropout_ratio=None):
+                         batch_norm=True,
+                         activation='relu',
+                         negative_slope=None,
+                         dropout=None):
     if isinstance(output_dims, int):
         output_dims = [output_dims]
     layers = []
@@ -180,27 +193,32 @@ def create_conv2d_blocks(input_dim,
                                   padding=padding,
                                   dilation=dilation,
                                   groups=groups,
-                                  has_bn=has_bn,
-                                  has_relu=has_relu,
-                                  leaky_slope=leaky_slope,
-                                  dropout_ratio=dropout_ratio)))
+                                  batch_norm=batch_norm,
+                                  activation=activation,
+                                  negative_slope=negative_slope,
+                                  dropout=dropout)))
         input_dim = output_dim
     return layers
 
 
-def create_fc_blocks(input_dim, output_dims, has_bn=True, has_relu=True, leaky_slope=None, dropout_ratio=None):
+def create_linear_blocks(input_dim,
+                         output_dims,
+                         batch_norm=True,
+                         activation='relu',
+                         negative_slope=None,
+                         dropout=None):
     if isinstance(output_dims, int):
         output_dims = [output_dims]
     layers = []
     for i, output_dim in enumerate(output_dims):
         index = str(i + 1)
         layers.append(('fc' + index,
-                       FCUnit(input_dim,
-                              output_dim,
-                              has_bn=has_bn,
-                              has_relu=has_relu,
-                              leaky_slope=leaky_slope,
-                              dropout_ratio=dropout_ratio)))
+                       LinearUnit(input_dim,
+                                  output_dim,
+                                  batch_norm=batch_norm,
+                                  activation=activation,
+                                  negative_slope=negative_slope,
+                                  dropout=dropout)))
         input_dim = output_dim
     return layers
 

@@ -5,7 +5,7 @@ import argparse
 from easydict import EasyDict as edict
 
 from vision3d.utils.python_utils import ensure_dir
-from vision3d.datasets.shapenetpart import ShapeNetPartNormalDataset as dataset
+from vision3d.datasets.shapenetpart import ShapeNetPartDataset as dataset
 
 config = edict()
 
@@ -13,52 +13,49 @@ config = edict()
 config.seed = 7351
 
 # dir
-config.PATH = edict()
-config.PATH.root_dir = '/home/zheng/workspace/vision3d'
-config.PATH.working_dir = osp.dirname(osp.realpath(__file__))
-config.PATH.program_name = osp.basename(config.PATH.working_dir)
-config.PATH.output_dir = osp.join(config.PATH.root_dir, 'output', config.PATH.program_name)
-config.PATH.snapshot_dir = osp.join(config.PATH.output_dir, 'snapshots')
-config.PATH.logs_dir = osp.join(config.PATH.output_dir, 'logs')
-config.PATH.events_dir = osp.join(config.PATH.output_dir, 'events')
-config.PATH.data_root = '/data/ShapeNetPart/shapenetcore_partanno_segmentation_benchmark_v0_normal'
 
-ensure_dir(config.PATH.output_dir)
-ensure_dir(config.PATH.snapshot_dir)
-ensure_dir(config.PATH.logs_dir)
-ensure_dir(config.PATH.events_dir)
+config.root_dir = '/home/zheng/workspace/vision3d'
+config.working_dir = osp.dirname(osp.realpath(__file__))
+config.program_name = osp.basename(config.working_dir)
+config.output_dir = osp.join(config.root_dir, 'output', config.program_name)
+config.snapshot_dir = osp.join(config.output_dir, 'snapshots')
+config.logs_dir = osp.join(config.output_dir, 'logs')
+config.events_dir = osp.join(config.output_dir, 'events')
+config.data_root = '/data/ShapeNetPart/shapenetcore_partanno_segmentation_benchmark_v0_normal'
+
+ensure_dir(config.output_dir)
+ensure_dir(config.snapshot_dir)
+ensure_dir(config.logs_dir)
+ensure_dir(config.events_dir)
 
 # data
-config.DATA = edict()
-config.DATA.num_class = dataset.num_class
-config.DATA.class_names = dataset.class_names
-config.DATA.num_part = dataset.num_part
-config.DATA.part_names = dataset.part_names
-config.DATA.class_id_to_part_ids = dataset.class_id_to_part_ids
-config.DATA.part_id_to_class_id = dataset.part_id_to_class_id
+config.num_class = dataset.num_class
+config.class_names = dataset.class_names
+config.num_part = dataset.num_part
+config.part_names = dataset.part_names
+config.class_id_to_part_ids = dataset.class_id_to_part_ids
+config.part_id_to_class_id = dataset.part_id_to_class_id
 
-config.TRAIN = edict()
-config.TRAIN.num_point = 2048
-config.TRAIN.sigma = 0.01
-config.TRAIN.batch_size = 32
-config.TRAIN.num_worker = 8
+# train config
+config.train_num_point = 2048
+config.train_jitter_sigma = 0.01
+config.train_batch_size = 32
+config.train_num_worker = 8
 
-config.TEST = edict()
-config.TEST.batch_size = 1
-config.TEST.num_worker = 8
+# test config
+config.test_batch_size = 1
+config.test_num_worker = 8
 
-# train
-config.OPTIMIZER = edict()
-config.OPTIMIZER.learning_rate = 0.1
-config.OPTIMIZER.eta_min = 0.001
-config.OPTIMIZER.momentum = 0.9
-config.OPTIMIZER.weight_decay = 1e-4
-config.OPTIMIZER.max_epoch = 250
+# optim config
+config.learning_rate = 0.1
+config.eta_min = 0.001
+config.momentum = 0.9
+config.weight_decay = 1e-4
+config.max_epoch = 250
 
 # model
-config.MODEL = edict()
-config.MODEL.alpha = 0.001
-config.MODEL.eps = 0.2
+config.tnet_loss_alpha = 0.001
+config.label_smoothing_eps = 0.2
 
 
 def parse_args():
@@ -71,4 +68,4 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     if args.link_output:
-        os.symlink(config.PATH.output_dir, 'output')
+        os.symlink(config.output_dir, 'output')

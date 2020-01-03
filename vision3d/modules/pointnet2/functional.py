@@ -4,7 +4,6 @@ import torch
 from torch.autograd import Function
 
 import vision3d.ext as ext
-from vision3d.utils.pytorch_utils import k_nearest_neighbors
 
 
 __all__ = [
@@ -18,8 +17,6 @@ __all__ = [
     'farthest_point_sampling_and_gather',
     'three_nearest_neighbors',
     'three_interpolate',
-    'naive_three_nearest_neighbors',
-    'naive_three_interpolate',
 ]
 
 
@@ -165,11 +162,9 @@ def random_ball_query(points, centroids, num_sample, radius):
 
 def _group_gather_and_concat(points, features, centroids, index):
     points = group_gather_by_index(points, index)
-    # points = dgcnn.group_gather_by_index(points, index)
     aligned_points = points - centroids.unsqueeze(3)
     if features is not None:
         features = group_gather_by_index(features, index)
-        # features = dgcnn.group_gather_by_index(features, index)
         features = torch.cat([features, aligned_points], dim=1)
     else:
         features = aligned_points
@@ -276,18 +271,3 @@ class ThreeInterpolateFunction(Function):
 
 
 three_interpolate = ThreeInterpolateFunction.apply
-
-
-def naive_three_nearest_neighbors(points1, points2):
-    num_point2 = points2.shape[2]
-    assert num_point2 >= 3, 'The sub-sampled points must contain more than 3 points.'
-    dist2, index = k_nearest_neighbors(points2, points1, 3)
-    return dist2, index
-
-
-def naive_three_interpolate(features, index, weights):
-    features = group_gather_by_index(features, index)
-    weights = weights.unsqueeze(1)
-    features = features * weights
-    features = features.sum(dim=3)
-    return features

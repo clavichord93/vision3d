@@ -11,6 +11,7 @@ output
 experiments/*
 vision3d/datasets/stanford3d.py
 vision3d/modules/interpcnn
+vision3d/modules/transformer
 
 # include project files
 !experiments/pointnet.modelnet40.resize+jitter.sgd.smooth

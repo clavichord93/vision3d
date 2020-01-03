@@ -3,7 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from vision3d.utils.pytorch_utils import create_conv1d_blocks, create_fc_blocks
+from vision3d.utils.pytorch_utils import create_conv1d_blocks, create_linear_blocks
 
 
 class PointNet(nn.Module):
@@ -15,7 +15,7 @@ class PointNet(nn.Module):
         self.shared_mlp = nn.Sequential(OrderedDict(layers))
 
         # classifier
-        layers = create_fc_blocks(1024, [512, 256], dropout_ratio=0.3)
+        layers = create_linear_blocks(1024, [512, 256], dropout=0.3)
         layers.append(('fc3', nn.Linear(256, num_class)))
         self.classifier = nn.Sequential(OrderedDict(layers))
 

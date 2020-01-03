@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from vision3d.utils.metrics import AccuracyRecorderV1
+from vision3d.utils.metrics import OverallAccuracy
 from vision3d.engine.engine import Engine
 from vision3d.modules.pointnet import PointNetLoss
 from dataset import train_data_loader
@@ -24,35 +24,35 @@ def make_parser():
 
 def main():
     parser = make_parser()
-    log_file = osp.join(config.PATH.logs_dir, 'train-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
+    log_file = osp.join(config.logs_dir, 'train-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
     with Engine(log_file=log_file, default_parser=parser, seed=config.seed) as engine:
         args = engine.args
 
-        data_loader = train_data_loader(config.PATH.data_root, config.TRAIN)
+        data_loader = train_data_loader(config)
 
-        model = create_model(config.DATA.num_class)
+        model = create_model(config.num_class)
         optimizer = optim.Adam(model.parameters(),
-                               lr=config.OPTIMIZER.learning_rate,
-                               weight_decay=config.OPTIMIZER.weight_decay)
+                               lr=config.learning_rate,
+                               weight_decay=config.weight_decay)
         engine.register_state(model=model, optimizer=optimizer)
 
-        if engine.resume_training:
-            engine.resume_from_snapshot()
+        if engine.snapshot is not None:
+            engine.load_snapshot(engine.snapshot)
 
-        model = engine.get_model()
-        model.train()
-
-        loss_func = PointNetLoss(alpha=config.MODEL.alpha, eps=config.MODEL.eps).cuda()
-
+        last_epoch = engine.state.epoch
         scheduler = optim.lr_scheduler.StepLR(optimizer,
-                                              config.OPTIMIZER.steps,
-                                              gamma=config.OPTIMIZER.gamma,
-                                              last_epoch=engine.state.epoch)
+                                              config.steps,
+                                              gamma=config.gamma,
+                                              last_epoch=last_epoch)
+
+        model = engine.get_cuda_model()
+        model.train()
+        loss_func = PointNetLoss(alpha=config.tnet_loss_alpha, eps=config.label_smoothing_eps).cuda()
 
         num_iter_per_epoch = len(data_loader)
 
-        for epoch in range(engine.state.epoch + 1, config.OPTIMIZER.max_epoch):
-            accuracy_recorder = AccuracyRecorderV1(config.DATA.num_class)
+        for epoch in range(last_epoch + 1, config.max_epoch):
+            oa_metric = OverallAccuracy(config.num_class)
 
             start_time = time.time()
 
@@ -74,15 +74,15 @@ def main():
                 loss.backward()
                 optimizer.step()
 
-                preds = outputs.argmax(dim=1).tolist()
-                for pred, label in zip(preds, labels.tolist()):
-                    accuracy_recorder.add_record(pred, label)
+                preds = outputs.argmax(dim=1).detach().cpu().numpy()
+                labels = labels.cpu().numpy()
+                oa_metric.add_results(preds, labels)
 
                 process_time = time.time() - start_time - prepare_time
 
                 if (i + 1) % args.steps == 0:
                     learning_rate = scheduler.get_lr()[0]
-                    message = 'Epoch {}/{}, '.format(epoch + 1, config.OPTIMIZER.max_epoch) + \
+                    message = 'Epoch {}/{}, '.format(epoch + 1, config.max_epoch) + \
                               'iter {}/{}, '.format(i + 1, num_iter_per_epoch) + \
                               'loss: {:.3f}, '.format(loss_val) + \
                               'cls_loss: {:.3f}, '.format(cls_loss_val) + \
@@ -95,13 +95,13 @@ def main():
 
                 start_time = time.time()
 
-            message = 'Epoch {}, acc: {:.3f}'.format(epoch, accuracy_recorder.get_overall_accuracy())
+            message = 'Epoch {}, acc: {:.3f}'.format(epoch, oa_metric.accuracy())
             engine.log(message)
 
             engine.register_state(epoch=epoch)
             scheduler.step()
 
-            snapshot = osp.join(config.PATH.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
+            snapshot = osp.join(config.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
             engine.save_snapshot(snapshot)
 
 

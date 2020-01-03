@@ -2,7 +2,7 @@ import torch.utils.data
 import numpy as np
 from tqdm import tqdm
 
-from vision3d.datasets.shapenetpart import ShapeNetPartNormalDataset
+from vision3d.datasets.shapenetpart import ShapeNetPartDataset
 import vision3d.transforms.functional as F
 from vision3d.utils.pytorch_utils import reset_numpy_random_seed
 
@@ -34,9 +34,9 @@ class TrainTransform(object):
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '(\n'
-        format_string += '    RandomSamplePointCloud({})\n'.format(self.num_point)
+        format_string += '    RandomSamplePointCloud(num_point={})\n'.format(self.num_point)
         format_string += '    NormalizePointCloud()\n'
-        format_string += '    RandomJitterPointCloud({})\n'.format(self.sigma)
+        format_string += '    RandomJitterPointCloud(sigma={})\n'.format(self.sigma)
         format_string += ')'
         return format_string
 
@@ -61,24 +61,25 @@ class TestTransform(object):
         return format_string
 
 
-def train_data_loader(root, split, config):
-    train_transform = TrainTransform(config.num_point, config.sigma)
-    train_dataset = ShapeNetPartNormalDataset(root, split, train_transform)
+def train_data_loader(config, split):
+    train_transform = TrainTransform(config.train_num_point, config.train_jitter_sigma)
+    train_dataset = ShapeNetPartDataset(config.data_root, split, train_transform)
     train_loader = torch.utils.data.DataLoader(train_dataset,
-                                               batch_size=config.batch_size,
+                                               batch_size=config.train_batch_size,
                                                shuffle=True,
-                                               num_workers=config.num_worker,
-                                               worker_init_fn=reset_numpy_random_seed,
-                                               pin_memory=True)
+                                               num_workers=config.train_num_worker,
+                                               pin_memory=True,
+                                               drop_last=True,
+                                               worker_init_fn=reset_numpy_random_seed)
     return train_loader
 
 
-def test_data_loader(root, split, config):
+def test_data_loader(config, split):
     test_transform = TestTransform()
-    test_dataset = ShapeNetPartNormalDataset(root, split, test_transform)
+    test_dataset = ShapeNetPartDataset(config.data_root, split, test_transform)
     test_loader = torch.utils.data.DataLoader(test_dataset,
-                                              batch_size=config.batch_size,
-                                              num_workers=config.num_worker,
+                                              batch_size=config.test_batch_size,
+                                              num_workers=config.test_num_worker,
                                               worker_init_fn=reset_numpy_random_seed)
     return test_loader
 
@@ -86,18 +87,18 @@ def test_data_loader(root, split, config):
 if __name__ == '__main__':
     from config import config
 
-    # train_data_loader = train_data_loader(config.PATH.data_root, 'train', config.TRAIN)
-    # statistics = np.zeros(config.DATA.num_class, dtype=np.int)
-    # for i, (x, y) in enumerate(train_data_loader):
-    #     for j in range(config.DATA.num_class):
-    #         statistics[j] += np.count_nonzero(y.numpy() == j)
-    # print(statistics)
+    train_data_loader = train_data_loader(config, 'train')
+    statistics = np.zeros(config.num_class, dtype=np.int)
+    for i, (x, y) in enumerate(train_data_loader):
+        for j in range(config.num_class):
+            statistics[j] += np.count_nonzero(y.numpy() == j)
+    print(statistics)
 
-    test_data_loader = test_data_loader(config.PATH.data_root, 'test', config.TEST)
-    statistics = np.zeros(config.DATA.num_part, dtype=np.int)
+    test_data_loader = test_data_loader(config, 'test')
+    statistics = np.zeros(config.num_part, dtype=np.int)
     pbar = tqdm(test_data_loader)
     for points, normals, labels, class_ids in pbar:
-        for j in range(config.DATA.num_part):
+        for j in range(config.num_part):
             statistics[j] += np.count_nonzero(labels.numpy() == j)
-    for part_name, num_point in zip(config.DATA.part_names, statistics):
+    for part_name, num_point in zip(config.part_names, statistics):
         print('{}: {}'.format(part_name, num_point))

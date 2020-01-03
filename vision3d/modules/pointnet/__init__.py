@@ -1,1 +1,1 @@
-from vision3d.modules.pointnet.modules import *
+from .modules import *

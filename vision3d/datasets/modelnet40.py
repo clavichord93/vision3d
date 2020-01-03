@@ -6,7 +6,7 @@ import torch.utils.data
 import numpy as np
 
 
-class ModelNet40Dataset(torch.utils.data.Dataset):
+class _ModelNet40DatasetBase(torch.utils.data.Dataset):
     num_class = 40
     class_names = [
         'airplane', 'bathtub', 'bed', 'bench', 'bookshelf',
@@ -19,7 +19,10 @@ class ModelNet40Dataset(torch.utils.data.Dataset):
         'toilet', 'tv_stand', 'vase', 'wardrobe', 'xbox'
     ]
 
+
+class ModelNet40Dataset(_ModelNet40DatasetBase):
     def __init__(self, root, phase, transform):
+        super(ModelNet40Dataset, self).__init__()
         data_files = glob.glob(osp.join(root, 'ply_data_{}*.h5'.format(phase)))
         all_points = []
         all_labels = []

@@ -13,50 +13,46 @@ config = edict()
 config.seed = 7351
 
 # dir
-config.PATH = edict()
-config.PATH.root_dir = '/home/zheng/workspace/vision3d'
-config.PATH.working_dir = osp.dirname(osp.realpath(__file__))
-config.PATH.program_name = osp.basename(config.PATH.working_dir)
-config.PATH.output_dir = osp.join(config.PATH.root_dir, 'output', config.PATH.program_name)
-config.PATH.snapshot_dir = osp.join(config.PATH.output_dir, 'snapshots')
-config.PATH.logs_dir = osp.join(config.PATH.output_dir, 'logs')
-config.PATH.events_dir = osp.join(config.PATH.output_dir, 'events')
-config.PATH.data_root = '/data/ModelNet40/modelnet40_ply_hdf5_2048'
+config.root_dir = '/home/zheng/workspace/vision3d'
+config.working_dir = osp.dirname(osp.realpath(__file__))
+config.program_name = osp.basename(config.working_dir)
+config.output_dir = osp.join(config.root_dir, 'output', config.program_name)
+config.snapshot_dir = osp.join(config.output_dir, 'snapshots')
+config.logs_dir = osp.join(config.output_dir, 'logs')
+config.events_dir = osp.join(config.output_dir, 'events')
+config.data_root = '/data/ModelNet40/modelnet40_ply_hdf5_2048'
 
-ensure_dir(config.PATH.output_dir)
-ensure_dir(config.PATH.snapshot_dir)
-ensure_dir(config.PATH.logs_dir)
-ensure_dir(config.PATH.events_dir)
+ensure_dir(config.output_dir)
+ensure_dir(config.snapshot_dir)
+ensure_dir(config.logs_dir)
+ensure_dir(config.events_dir)
 
 # data
-config.DATA = edict()
-config.DATA.num_class = dataset.num_class
-config.DATA.class_names = dataset.class_names
+config.num_class = dataset.num_class
+config.class_names = dataset.class_names
 
-config.TRAIN = edict()
-config.TRAIN.num_point = 1024
-config.TRAIN.sigma = 0.01
-config.TRAIN.low = 0.8
-config.TRAIN.high = 1.2
-config.TRAIN.batch_size = 32
-config.TRAIN.num_worker = 8
+# train config
+config.train_num_point = 1024
+config.train_jitter_sigma = 0.01
+config.train_rescale_low = 0.8
+config.train_rescale_high = 1.2
+config.train_batch_size = 32
+config.train_num_worker = 8
 
-config.TEST = edict()
-config.TEST.num_point = 1024
-config.TEST.batch_size = 32
-config.TEST.num_worker = 8
+# test config
+config.test_num_point = 1024
+config.test_batch_size = 32
+config.test_num_worker = 8
 
-# train
-config.OPTIMIZER = edict()
-config.OPTIMIZER.learning_rate = 0.1
-config.OPTIMIZER.eta_min = 0.001
-config.OPTIMIZER.momentum = 0.9
-config.OPTIMIZER.weight_decay = 1e-4
-config.OPTIMIZER.max_epoch = 250
+# optim config
+config.learning_rate = 0.1
+config.eta_min = 0.001
+config.momentum = 0.9
+config.weight_decay = 1e-4
+config.max_epoch = 250
 
 # model
-config.MODEL = edict()
-config.MODEL.eps = 0.2
+config.label_smoothing_eps = 0.2
 
 
 def parse_args():
@@ -69,4 +65,4 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     if args.link_output:
-        os.symlink(config.PATH.output_dir, 'output')
+        os.symlink(config.output_dir, 'output')

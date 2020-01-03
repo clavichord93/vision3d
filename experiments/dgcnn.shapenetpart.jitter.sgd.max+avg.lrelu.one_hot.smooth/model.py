@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from vision3d.modules.dgcnn import EdgeConv
-from vision3d.utils.pytorch_utils import create_conv1d_blocks, create_fc_blocks
+from vision3d.utils.pytorch_utils import create_conv1d_blocks, create_linear_blocks
 
 
 class DynamicGraphCNN(nn.Module):
@@ -23,7 +23,7 @@ class DynamicGraphCNN(nn.Module):
         self.shared_mlp = nn.Sequential(OrderedDict(layers))
 
         # MLP for categorical vector
-        layers = create_fc_blocks(16, 64)
+        layers = create_linear_blocks(16, 64)
         self.mlp = nn.Sequential(OrderedDict(layers))
 
         # classifier

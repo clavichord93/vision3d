@@ -34,7 +34,7 @@ def random_rotate_point_cloud(points):
     return points
 
 
-def random_resize_point_cloud(points, low=0.8, high=1.2):
+def random_rescale_point_cloud(points, low=0.8, high=1.2):
     scale = random.uniform(low, high)
     points = points * scale
     return points

@@ -3,8 +3,8 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from vision3d.utils.pytorch_utils import create_conv2d_blocks
-import vision3d.modules.dgcnn.functional as F
+from . import functional as F
+from ...utils.pytorch_utils import create_conv2d_blocks
 
 
 class EdgeConv(nn.Module):
@@ -14,12 +14,13 @@ class EdgeConv(nn.Module):
     :param points: torch.Tensor (batch_size, num_channel1, num_point)
     :return features: torch.Tensor (batch_size, num_channel2, num_point)
     """
-    def __init__(self, input_dim, output_dims, num_neighbor, leaky_slope=None):
+    def __init__(self, input_dim, output_dims, num_neighbor, activation='relu', negative_slope=None):
         super(EdgeConv, self).__init__()
         layers = create_conv2d_blocks(input_dim * 2,
                                       output_dims,
                                       kernel_size=1,
-                                      leaky_slope=leaky_slope)
+                                      activation=activation,
+                                      negative_slope=negative_slope)
         self.shared_mlp = nn.Sequential(OrderedDict(layers))
         self.num_neighbor = num_neighbor
 

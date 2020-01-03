@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from vision3d.modules.dgcnn import EdgeConv
-from vision3d.utils.pytorch_utils import create_fc_blocks, create_conv1d_blocks
+from vision3d.utils.pytorch_utils import create_linear_blocks, create_conv1d_blocks
 
 
 class DynamicGraphCNN(nn.Module):
@@ -12,17 +12,17 @@ class DynamicGraphCNN(nn.Module):
         super(DynamicGraphCNN, self).__init__()
 
         # EdgeConv
-        self.edgeconv1 = EdgeConv(3, 64, num_neighbor=20, leaky_slope=0.2)
-        self.edgeconv2 = EdgeConv(64, 64, num_neighbor=20, leaky_slope=0.2)
-        self.edgeconv3 = EdgeConv(64, 128, num_neighbor=20, leaky_slope=0.2)
-        self.edgeconv4 = EdgeConv(128, 256, num_neighbor=20, leaky_slope=0.2)
+        self.edgeconv1 = EdgeConv(3, 64, num_neighbor=20, activation='lrelu', negative_slope=0.2)
+        self.edgeconv2 = EdgeConv(64, 64, num_neighbor=20, activation='lrelu', negative_slope=0.2)
+        self.edgeconv3 = EdgeConv(64, 128, num_neighbor=20, activation='lrelu', negative_slope=0.2)
+        self.edgeconv4 = EdgeConv(128, 256, num_neighbor=20, activation='lrelu', negative_slope=0.2)
 
         # Shared MLP
-        layers = create_conv1d_blocks(512, 1024, kernel_size=1, leaky_slope=0.2)
+        layers = create_conv1d_blocks(512, 1024, kernel_size=1, activation='lrelu', negative_slope=0.2)
         self.shared_mlp = nn.Sequential(OrderedDict(layers))
 
         # classifier
-        layers = create_fc_blocks(1024 * 2, [512, 256], dropout_ratio=0.5, leaky_slope=0.2)
+        layers = create_linear_blocks(1024 * 2, [512, 256], dropout=0.5, activation='lrelu', negative_slope=0.2)
         layers.append(('fc3', nn.Linear(256, num_class)))
         self.classifier = nn.Sequential(OrderedDict(layers))
 
@@ -50,6 +50,7 @@ def create_model(num_class):
 
 if __name__ == '__main__':
     model = DynamicGraphCNN(40).cuda()
+    print(model)
     print(model.state_dict().keys())
 
     points = torch.randn(8, 3, 1024).cuda()

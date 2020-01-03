@@ -1,29 +1,7 @@
 import numpy as np
 
 
-class AccuracyRecorderV1(object):
-    def __init__(self, num_class):
-        self.num_class = num_class
-        self.num_correct = 0
-        self.num_record = 0
-        self.num_correct_per_class = [0] * num_class
-        self.num_record_per_class = [0] * num_class
-
-    def add_record(self, pred, label):
-        result = pred == label
-        self.num_correct += result
-        self.num_record += 1
-        self.num_correct_per_class[label] += result
-        self.num_record_per_class[label] += 1
-
-    def get_overall_accuracy(self):
-        return self.num_correct / self.num_record
-
-    def get_accuracy(self, class_id):
-        return self.num_correct_per_class[class_id] / self.num_record_per_class[class_id]
-
-
-class AccuracyRecorderV2(object):
+class OverallAccuracy(object):
     def __init__(self, num_class):
         self.num_class = num_class
         self.num_correct = 0
@@ -31,7 +9,7 @@ class AccuracyRecorderV2(object):
         self.num_correct_per_class = np.zeros(num_class, dtype=np.float)
         self.num_record_per_class = np.zeros(num_class, dtype=np.float)
 
-    def add_records(self, preds, labels):
+    def add_results(self, preds, labels):
         preds = preds.reshape(-1)
         labels = labels.reshape(-1)
         results = np.equal(preds, labels)
@@ -49,7 +27,7 @@ class AccuracyRecorderV2(object):
         return self.num_correct_per_class[class_id] / self.num_record_per_class[class_id]
 
 
-class PartMeanIoURecorder(object):
+class PartMeanIoU(object):
     r"""
     Mean IoU (Intersect over Union) metric for Part Segmentation task.
     """
@@ -60,7 +38,12 @@ class PartMeanIoURecorder(object):
         self.ious = []
         self.ious_per_class = [[] for _ in range(num_class)]
 
-    def add_records(self, preds, labels, class_id):
+    def add_results(self, preds, labels, class_ids):
+        batch_size = preds.shape[0]
+        for i in range(batch_size):
+            self._add_result(preds[i], labels[i], class_ids[i])
+
+    def _add_result(self, preds, labels, class_id):
         ious = []
         part_ids = self.class_id_to_part_ids[class_id]
         for part_id in part_ids:
@@ -71,18 +54,18 @@ class PartMeanIoURecorder(object):
             if union_per_part > 0:
                 iou = intersect_per_part / union_per_part
             else:
-                iou = 1
+                iou = 1.
             ious.append(iou)
         iou = np.mean(ious)
         self.ious.append(iou)
         self.ious_per_class[class_id].append(iou)
 
-    def mean_iou_over_instance(self):
+    def instance_miou(self):
         return np.mean(self.ious)
 
-    def mean_iou_over_class(self):
+    def class_miou(self):
         mean_iou_per_class = [np.mean(self.ious_per_class[i]) for i in range(self.num_class)]
         return np.mean(mean_iou_per_class)
 
-    def mean_iou_per_class(self, class_id):
+    def instance_miou_per_class(self, class_id):
         return np.mean(self.ious_per_class[class_id])

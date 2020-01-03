@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-import vision3d.modules.pointnet2.functional as F
-from vision3d.utils.pytorch_utils import k_nearest_neighbors
+from ..pointnet2 import functional as F
+from ...utils.pytorch_utils import k_nearest_neighbors
 
 
 __all__ = [

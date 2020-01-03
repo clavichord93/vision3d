@@ -3,7 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from vision3d.utils.pytorch_utils import create_conv1d_blocks, create_fc_blocks, SmoothCrossEntropyLoss
+from ...utils.pytorch_utils import create_conv1d_blocks, create_linear_blocks, SmoothCrossEntropyLoss
 
 
 class TNet(nn.Module):
@@ -14,7 +14,7 @@ class TNet(nn.Module):
         layers = create_conv1d_blocks(input_dim, output_dims1, kernel_size=1)
         self.shared_mlp = nn.Sequential(OrderedDict(layers))
 
-        layers = create_fc_blocks(output_dims1[-1], output_dims2)
+        layers = create_linear_blocks(output_dims1[-1], output_dims2)
         self.mlp = nn.Sequential(OrderedDict(layers))
 
         self.weight = nn.Parameter(torch.zeros(output_dims2[-1], input_dim * input_dim), requires_grad=True)
@@ -35,8 +35,10 @@ class TNetLoss(nn.Module):
         super(TNetLoss, self).__init__()
 
     def forward(self, transforms):
-        assert transforms.dim() == 3, 'The dimension of the transform matrix is not 3!'
-        assert transforms.shape[1] == transforms.shape[2], 'The transform matrix must be square!'
+        if transforms.dim() != 3:
+            raise ValueError('The dimension of the transform matrix is not 3!')
+        if transforms.shape[1] != transforms.shape[2]:
+            raise ValueError('The transform matrix must be a square matrix!')
         device = transforms.device
         dim = transforms.shape[1]
         identity = torch.eye(dim).to(device)

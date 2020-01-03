@@ -32,7 +32,7 @@ class PointNet2(nn.Module):
         self.fp_module3 = FeaturePropagationModule(input_dim=150, output_dims=[128, 128, 128])
 
         # classifier
-        layers = create_conv1d_blocks(128, 128, kernel_size=1, dropout_ratio=0.5)
+        layers = create_conv1d_blocks(128, 128, kernel_size=1, dropout=0.5)
         layers.append(('conv2', nn.Conv1d(128, num_part, kernel_size=1)))
         self.classifier = nn.Sequential(OrderedDict(layers))
 

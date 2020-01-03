@@ -99,12 +99,6 @@ class _ShapeNetPartDatasetBase(torch.utils.data.Dataset):
         '04379243': 'Table',
     }
 
-    def __getitem__(self, index):
-        pass
-
-    def __len__(self):
-        pass
-
 
 def get_part_id(synset, index):
     class_name = _ShapeNetPartDatasetBase.synset_to_class_name[synset]
@@ -117,89 +111,6 @@ def get_class_id(synset):
 
 
 def preprocess(root):
-    r"""
-    Preprocess the dataset and dump to pickle files for faster loading.
-
-    :param root: str
-        The root path of ShapeNetPart dataset.
-    """
-    data_dict = {}
-    for split in ['train', 'val', 'test']:
-        print('Processing "{}" split...'.format(split))
-        data_split_file = osp.join(root, 'train_test_split', 'shuffled_{}_file_list.json'.format(split))
-        max_num_point = 0
-        min_num_point = sys.maxsize
-        with open(data_split_file) as f:
-            all_points = []
-            all_labels = []
-            all_class_ids = []
-            shapenet_paths = json.load(f)
-            pbar = tqdm(shapenet_paths)
-            for shapenet_path in pbar:
-                synset, shape_id = shapenet_path.split('/')[1:]
-
-                pts_file = osp.join(root, synset, 'points', '{}.pts'.format(shape_id))
-                with open(pts_file) as f:
-                    lines = f.readlines()
-                    points = [[float(x) for x in line.strip().split()] for line in lines]
-                    points = np.array(points, dtype=np.float)
-                    all_points.append(points)
-
-                seg_file = osp.join(root, synset, 'points_label', '{}.seg'.format(shape_id))
-                with open(seg_file) as f:
-                    lines = f.readlines()
-                    labels = [get_part_id(synset, int(line)) for line in lines]
-                    labels = np.array(labels, dtype=np.int)
-                    all_labels.append(labels)
-
-                class_id = get_class_id(synset)
-                all_class_ids.append(class_id)
-
-                num_point = len(points)
-                max_num_point = max(max_num_point, num_point)
-                min_num_point = min(min_num_point, num_point)
-                message = 'num_point: {}'.format(num_point)
-                pbar.set_description(message)
-            data_dict[split] = {'points': all_points, 'labels': all_labels, 'class_ids': all_class_ids}
-        print('"{}" finished (max_num_point={}, min_num_points={})'.format(split, max_num_point, min_num_point))
-    data_dict['trainval'] = {'points': data_dict['train']['points'] + data_dict['val']['points'],
-                             'labels': data_dict['train']['labels'] + data_dict['val']['labels'],
-                             'class_ids': data_dict['train']['class_ids'] + data_dict['val']['class_ids']}
-
-    pickle_root = osp.join(root, 'pickle')
-    ensure_dir(pickle_root)
-    for split in ['train', 'val', 'trainval', 'test']:
-        dump_file = osp.join(root, 'pickle', '{}.pickle'.format(split))
-        with open(dump_file, 'wb') as f:
-            pickle.dump(data_dict[split], f)
-            print('"{}" saved.'.format(dump_file))
-
-
-class ShapeNetPartDataset(_ShapeNetPartDatasetBase):
-    def __init__(self, root, split, transform):
-        assert split in ['train', 'val', 'trainval', 'test'], 'Invalid split "{}"!'.format(split)
-        super(ShapeNetPartDataset, self).__init__()
-
-        dump_file = osp.join(root, 'pickle', '{}.pickle'.format(split))
-        with open(dump_file, 'rb') as f:
-            data_dict = pickle.load(f)
-
-        self.points = data_dict['points']
-        self.labels = data_dict['labels']
-        self.class_ids = data_dict['class_ids']
-        self.transform = transform
-        self.num_shape = len(self.points)
-
-    def __getitem__(self, index):
-        points, labels = self.transform(self.points[index], self.labels[index])
-        class_id = self.class_ids[index]
-        return points, labels, class_id
-
-    def __len__(self):
-        return self.num_shape
-
-
-def preprocess_normal(root):
     r"""
     Preprocess the dataset with normals and dump to pickle files for faster loading.
 
@@ -262,10 +173,11 @@ def preprocess_normal(root):
             print('"{}" saved.'.format(dump_file))
 
 
-class ShapeNetPartNormalDataset(_ShapeNetPartDatasetBase):
-    def __init__(self, root, split, transform):
-        assert split in ['train', 'val', 'trainval', 'test'], 'Invalid split "{}"!'.format(split)
-        super(ShapeNetPartNormalDataset, self).__init__()
+class ShapeNetPartDataset(_ShapeNetPartDatasetBase):
+    def __init__(self, root, split, transform, use_normal=True):
+        if split not in ['train', 'val', 'trainval', 'test']:
+            raise ValueError('Invalid split "{}"!'.format(split))
+        super(ShapeNetPartDataset, self).__init__()
 
         dump_file = osp.join(root, 'pickle', '{}.pickle'.format(split))
         with open(dump_file, 'rb') as f:
@@ -277,31 +189,26 @@ class ShapeNetPartNormalDataset(_ShapeNetPartDatasetBase):
         self.class_ids = data_dict['class_ids']
         self.transform = transform
         self.num_shape = len(self.points)
+        self.use_normal = use_normal
 
     def __getitem__(self, index):
-        points, normals, labels = self.transform(self.points[index], self.normals[index], self.labels[index])
         class_id = self.class_ids[index]
-        return points, normals, labels, class_id
+        if self.use_normal:
+            points, normals, labels = self.transform(self.points[index], self.normals[index], self.labels[index])
+            return points, normals, labels, class_id
+        else:
+            points, labels = self.transform(self.points[index], self.labels[index])
+            return points, labels, class_id
 
     def __len__(self):
         return self.num_shape
 
 
 if __name__ == '__main__':
-    root = '/data/ShapeNetPart/shapenetcore_partanno_segmentation_benchmark_v0'
+    root = '/data/ShapeNetPart/shapenetcore_partanno_segmentation_benchmark_v0_normal'
     preprocess(root)
 
     dataset = ShapeNetPartDataset(root, 'trainval', None)
-    max_num_point = 0
-    for points in dataset.points:
-        num_point = points.shape[0]
-        max_num_point = max(max_num_point, num_point)
-    print(max_num_point)
-
-    root = '/data/ShapeNetPart/shapenetcore_partanno_segmentation_benchmark_v0_normal'
-    preprocess_normal(root)
-
-    dataset = ShapeNetPartNormalDataset(root, 'trainval', None)
     max_num_point = 0
     for points in dataset.points:
         num_point = points.shape[0]

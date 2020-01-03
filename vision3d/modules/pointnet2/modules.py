@@ -3,8 +3,8 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-import vision3d.modules.pointnet2.functional as F
-from vision3d.utils.pytorch_utils import create_conv1d_blocks, create_conv2d_blocks
+from . import functional as F
+from ...utils.pytorch_utils import create_conv1d_blocks, create_conv2d_blocks
 
 
 class SetAbstractionModule(nn.Module):
@@ -28,8 +28,10 @@ class SetAbstractionModule(nn.Module):
 class MultiScaleSetAbstractionModule(nn.Module):
     def __init__(self, input_dim, output_dims_list, num_centroid, num_samples, radii):
         super(MultiScaleSetAbstractionModule, self).__init__()
-        assert len(output_dims_list) == len(num_samples), 'The sizes of output_dims_list and num_samples do not match.'
-        assert len(output_dims_list) == len(radii), 'The sizes of output_dims_list and radii do not match.'
+        if len(output_dims_list) != len(num_samples):
+            raise ValueError('The sizes of output_dims_list and num_samples do not match.')
+        if len(output_dims_list) != len(radii):
+            raise ValueError('The sizes of output_dims_list and radii do not match.')
         self.num_centroid = num_centroid
         self.num_samples = num_samples
         self.radii = radii
@@ -64,8 +66,8 @@ class GlobalAbstractionModule(nn.Module):
         features = torch.cat([features, points], dim=1)
         features = self.pointnet(features)
         features, _ = features.max(dim=2, keepdim=True)
-        points = torch.zeros(batch_size, num_coordinate, 1).to(device)
-        return points, features
+        centroids = torch.zeros(batch_size, num_coordinate, 1).to(device)
+        return centroids, features
 
 
 class FeaturePropagationModule(nn.Module):
