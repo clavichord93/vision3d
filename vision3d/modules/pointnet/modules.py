@@ -57,8 +57,7 @@ class PointNetLoss(nn.Module):
             self.cls_loss = SmoothCrossEntropyLoss(eps=eps)
         self.alpha = alpha
 
-    def forward(self, *inputs):
-        outputs, labels, transforms = inputs
+    def forward(self, outputs, labels, transforms):
         cls_loss = self.cls_loss(outputs, labels)
         tnet_loss = self.alpha * self.tnet_loss(transforms)
         loss = cls_loss + tnet_loss

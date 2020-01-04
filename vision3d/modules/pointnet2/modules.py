@@ -16,8 +16,7 @@ class SetAbstractionModule(nn.Module):
         layers = create_conv2d_blocks(input_dim, output_dims, kernel_size=1)
         self.pointnet = nn.Sequential(OrderedDict(layers))
 
-    def forward(self, *inputs):
-        points, features = inputs
+    def forward(self, points, features):
         centroids = F.farthest_point_sampling_and_gather(points, self.num_centroid)
         points, features = F.ball_query_and_group_gather(points, features, centroids, self.num_sample, self.radius)
         features = self.pointnet(features)
@@ -40,8 +39,7 @@ class MultiScaleSetAbstractionModule(nn.Module):
             layers = create_conv2d_blocks(input_dim, output_dims, kernel_size=1)
             self.pointnets.append(nn.Sequential(OrderedDict(layers)))
 
-    def forward(self, *inputs):
-        points, features = inputs
+    def forward(self, points, features):
         centroids = F.farthest_point_sampling_and_gather(points, self.num_centroid)
         overall_features = []
         for i, (num_sample, radius) in enumerate(zip(self.num_samples, self.radii)):
@@ -59,8 +57,7 @@ class GlobalAbstractionModule(nn.Module):
         layers = create_conv1d_blocks(input_dim, output_dims, kernel_size=1)
         self.pointnet = nn.Sequential(OrderedDict(layers))
 
-    def forward(self, *inputs):
-        points, features = inputs
+    def forward(self, points, features):
         device = points.device
         batch_size, num_coordinate, _ = points.shape
         features = torch.cat([features, points], dim=1)
@@ -90,8 +87,7 @@ class FeaturePropagationModule(nn.Module):
         layers = create_conv1d_blocks(input_dim, output_dims, kernel_size=1)
         self.pointnet = nn.Sequential(OrderedDict(layers))
 
-    def forward(self, *inputs):
-        points1, features1, points2, features2 = inputs
+    def forward(self, points1, features1, points2, features2):
         num_point1 = points1.shape[2]
         num_point2 = points2.shape[2]
         if num_point2 == 1:

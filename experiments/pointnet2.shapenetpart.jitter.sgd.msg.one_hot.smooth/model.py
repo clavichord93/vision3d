@@ -42,8 +42,7 @@ class PointNet2(nn.Module):
         layers.append(('conv2', nn.Conv1d(128, num_part, kernel_size=1)))
         self.classifier = nn.Sequential(OrderedDict(layers))
 
-    def forward(self, *inputs):
-        points, features, class_ids = inputs
+    def forward(self, points, features, class_ids):
         batch_size, _, num_point = points.shape
         one_hot = nn.functional.one_hot(class_ids, self.num_class).float()
 

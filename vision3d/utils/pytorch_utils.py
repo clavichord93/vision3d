@@ -10,13 +10,17 @@ def reset_numpy_random_seed(worker_id):
     np.random.seed(seed)
 
 
-def _get_activation_fn(activation_fn, negative_slope=None):
+def _get_activation_fn(activation_fn, **kwargs):
     if activation_fn == 'relu':
         return nn.ReLU(inplace=True)
     elif activation_fn == 'lrelu':
-        if negative_slope is None:
+        if 'negative_slope' in kwargs:
+            negative_slope = kwargs['negative_slope']
+        else:
             negative_slope = 0.01
         return nn.LeakyReLU(negative_slope=negative_slope, inplace=True)
+    elif activation_fn == 'elu':
+        return nn.ELU(inplace=True)
     elif activation_fn == 'sigmoid':
         return nn.Sigmoid()
     else:
@@ -28,8 +32,7 @@ class SmoothCrossEntropyLoss(nn.Module):
         super(SmoothCrossEntropyLoss, self).__init__()
         self.eps = eps
 
-    def forward(self, *inputs):
-        preds, labels = inputs
+    def forward(self, preds, labels):
         device = preds.device
         one_hot = torch.zeros_like(preds).to(device)
         one_hot = one_hot.scatter(1, labels.unsqueeze(1), 1)
@@ -53,8 +56,8 @@ class ConvUnit1d(nn.Sequential):
                  groups=1,
                  batch_norm=True,
                  activation='relu',
-                 negative_slope=None,
-                 dropout=None):
+                 dropout=None,
+                 **kwargs):
         super(ConvUnit1d, self).__init__()
         bias = not batch_norm
         self.add_module('conv',
@@ -69,7 +72,7 @@ class ConvUnit1d(nn.Sequential):
         if batch_norm:
             self.add_module('bn', nn.BatchNorm1d(output_dim))
         if activation is not None:
-            activation_fn = _get_activation_fn(activation, negative_slope=negative_slope)
+            activation_fn = _get_activation_fn(activation, **kwargs)
             self.add_module(activation, activation_fn)
         if dropout is not None:
             self.add_module('dp', nn.Dropout(dropout))
@@ -89,8 +92,8 @@ class ConvUnit2d(nn.Sequential):
                  groups=1,
                  batch_norm=True,
                  activation='relu',
-                 negative_slope=None,
-                 dropout=None):
+                 dropout=None,
+                 **kwargs):
         super(ConvUnit2d, self).__init__()
         bias = not batch_norm
         self.add_module('conv',
@@ -105,7 +108,7 @@ class ConvUnit2d(nn.Sequential):
         if batch_norm:
             self.add_module('bn', nn.BatchNorm2d(output_dim))
         if activation is not None:
-            activation_fn = _get_activation_fn(activation, negative_slope=negative_slope)
+            activation_fn = _get_activation_fn(activation, **kwargs)
             self.add_module(activation, activation_fn)
         if dropout is not None:
             self.add_module('dp', nn.Dropout(dropout))
@@ -120,15 +123,15 @@ class LinearUnit(nn.Sequential):
                  output_dim,
                  batch_norm=True,
                  activation='relu',
-                 negative_slope=None,
-                 dropout=None):
+                 dropout=None,
+                 **kwargs):
         super(LinearUnit, self).__init__()
         bias = not batch_norm
         self.add_module('fc', nn.Linear(input_dim, output_dim, bias=bias))
         if batch_norm:
             self.add_module('bn', nn.BatchNorm1d(output_dim))
         if activation is not None:
-            activation_fn = _get_activation_fn(activation, negative_slope=negative_slope)
+            activation_fn = _get_activation_fn(activation, **kwargs)
             self.add_module(activation, activation_fn)
         if dropout is not None:
             self.add_module('dp', nn.Dropout(dropout))
@@ -146,8 +149,8 @@ def create_conv1d_blocks(input_dim,
                          groups=1,
                          batch_norm=True,
                          activation='relu',
-                         negative_slope=None,
-                         dropout=None):
+                         dropout=None,
+                         **kwargs):
     if isinstance(output_dims, int):
         output_dims = [output_dims]
     layers = []
@@ -163,8 +166,8 @@ def create_conv1d_blocks(input_dim,
                                   groups=groups,
                                   batch_norm=batch_norm,
                                   activation=activation,
-                                  negative_slope=negative_slope,
-                                  dropout=dropout)))
+                                  dropout=dropout,
+                                  **kwargs)))
         input_dim = output_dim
     return layers
 
@@ -178,8 +181,8 @@ def create_conv2d_blocks(input_dim,
                          groups=1,
                          batch_norm=True,
                          activation='relu',
-                         negative_slope=None,
-                         dropout=None):
+                         dropout=None,
+                         **kwargs):
     if isinstance(output_dims, int):
         output_dims = [output_dims]
     layers = []
@@ -195,8 +198,8 @@ def create_conv2d_blocks(input_dim,
                                   groups=groups,
                                   batch_norm=batch_norm,
                                   activation=activation,
-                                  negative_slope=negative_slope,
-                                  dropout=dropout)))
+                                  dropout=dropout,
+                                  **kwargs)))
         input_dim = output_dim
     return layers
 
@@ -205,8 +208,8 @@ def create_linear_blocks(input_dim,
                          output_dims,
                          batch_norm=True,
                          activation='relu',
-                         negative_slope=None,
-                         dropout=None):
+                         dropout=None,
+                         **kwargs):
     if isinstance(output_dims, int):
         output_dims = [output_dims]
     layers = []
@@ -217,8 +220,8 @@ def create_linear_blocks(input_dim,
                                   output_dim,
                                   batch_norm=batch_norm,
                                   activation=activation,
-                                  negative_slope=negative_slope,
-                                  dropout=dropout)))
+                                  dropout=dropout,
+                                  **kwargs)))
         input_dim = output_dim
     return layers
 
