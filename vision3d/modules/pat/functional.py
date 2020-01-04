@@ -49,5 +49,9 @@ def dilated_k_nearest_neighbors(points, num_neighbor, dilation):
     return points
 
 
-def farthest_point_sampling(points, features, num_sample):
+def farthest_point_sampling_and_gather(points, features, num_sample):
     index = F.farthest_point_sampling(points, num_sample)
+    points = F.gather_by_index(points, index)
+    if features is not None:
+        features = F.gather_by_index(features, index)
+    return points, features

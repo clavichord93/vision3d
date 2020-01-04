@@ -59,7 +59,7 @@ class GroupShuffleAttention(nn.Module):
 
 
 class GumbelSubsetSampling(nn.Module):
-    def __init__(self, input_dim, num_sample, tau, hard=False):
+    def __init__(self, input_dim, num_sample, tau, hard):
         super(GumbelSubsetSampling, self).__init__()
         self.num_sample = num_sample
         self.tau = tau
