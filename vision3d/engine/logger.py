@@ -2,7 +2,7 @@ import coloredlogs
 import logging
 
 
-def create_logger(output_file=None):
+def create_logger(log_file=None):
     logger = logging.getLogger(__name__)
     logger.setLevel(level=logging.DEBUG)
 
@@ -13,8 +13,8 @@ def create_logger(output_file=None):
     stream_handler.setFormatter(colored_formatter)
     logger.addHandler(stream_handler)
 
-    if output_file is not None:
-        file_handler = logging.FileHandler(output_file)
+    if log_file is not None:
+        file_handler = logging.FileHandler(log_file)
         formatter = logging.Formatter(format_str, datefmt='%Y-%m-%d %H:%M:%S')
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)

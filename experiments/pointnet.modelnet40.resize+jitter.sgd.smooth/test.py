@@ -1,9 +1,11 @@
 import argparse
+import os
 import os.path as osp
 from tqdm import tqdm
 import time
 
 import torch
+import torch.nn as nn
 
 from vision3d.utils.metrics import AccuracyMeter
 from vision3d.engine.engine import Engine
@@ -21,15 +23,12 @@ def make_parser():
     return parser
 
 
-def test_epoch(engine, data_loader, epoch, verbose=False):
-    model = engine.get_cuda_model()
+def test_epoch(engine, data_loader, model, epoch):
     model.eval()
-
     accuracy_meter = AccuracyMeter(config.num_class)
-
+    pbar = tqdm(enumerate(data_loader), total=len(data_loader))
     start_time = time.time()
 
-    pbar = tqdm(enumerate(data_loader), total=len(data_loader))
     for i, batch in pbar:
         points, labels = batch
         points = points.cuda()
@@ -37,9 +36,7 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
         prepare_time = time.time() - start_time
 
         outputs = model(points)
-        preds = outputs.argmax(dim=1)
-
-        preds = preds.detach().cpu().numpy()
+        preds = outputs.argmax(dim=1).detach().cpu().numpy()
         labels = labels.numpy()
         accuracy_meter.add_results(preds, labels)
 
@@ -53,12 +50,12 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
     accuracy = accuracy_meter.accuracy()
 
     message = 'Epoch {}, acc: {:.3f}'.format(epoch, accuracy)
-    engine.log(message)
-    if verbose:
+    engine.logger.info(message)
+    if engine.args.verbose:
         for i in range(config.num_class):
             class_name = config.class_names[i]
             accuracy = accuracy_meter.accuracy_per_class(i)
-            engine.log('  {}: {:.3f}'.format(class_name, accuracy))
+            engine.logger.info('  {}: {:.3f}'.format(class_name, accuracy))
 
     return accuracy
 
@@ -67,28 +64,28 @@ def main():
     parser = make_parser()
     log_file = osp.join(config.logs_dir, 'test-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
     with Engine(log_file=log_file, default_parser=parser, seed=config.seed) as engine:
-        args = engine.args
-
         data_loader = test_data_loader(config)
 
-        model = create_model(config.num_class)
+        model = create_model(config.num_class).cuda()
+        if engine.data_parallel:
+            model = nn.DataParallel(model)
         engine.register_state(model=model)
 
         if engine.snapshot is not None:
             engine.load_snapshot(engine.snapshot)
-            test_epoch(engine, data_loader, epoch=engine.state.epoch, verbose=args.verbose)
+            test_epoch(engine, data_loader, model, engine.state.epoch)
         else:
             best_accuracy = 0
             best_epoch = -1
-            for epoch in range(args.start_epoch, args.end_epoch + 1):
+            for epoch in range(engine.args.start_epoch, engine.args.end_epoch + 1):
                 snapshot = osp.join(config.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
                 engine.load_snapshot(snapshot)
-                accuracy = test_epoch(engine, data_loader, epoch=epoch, verbose=args.verbose)
+                accuracy = test_epoch(engine, data_loader, model, epoch)
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     best_epoch = epoch
             message = 'Best acc: {:.3f}, best epoch: {}'.format(best_accuracy, best_epoch)
-            engine.log(message)
+            engine.logger.info(message)
 
 
 if __name__ == '__main__':

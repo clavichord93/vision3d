@@ -3,7 +3,10 @@
 
 // input: points(b, c, n) idx(b, m)
 // output: out(b, c, m)
-__global__ void gather_by_index_kernel(int b, int c, int n, int m,
+__global__ void gather_by_index_kernel(int b,
+                                       int c,
+                                       int n,
+                                       int m,
                                        const float *__restrict__ points,
                                        const long *__restrict__ idx,
                                        float *__restrict__ out) {
@@ -17,11 +20,16 @@ __global__ void gather_by_index_kernel(int b, int c, int n, int m,
   }
 }
 
-void gather_by_index_kernel_launcher(int b, int c, int n, int npoints,
-                                     const float *points, const long *idx,
+void gather_by_index_kernel_launcher(int b,
+                                     int c,
+                                     int n,
+                                     int npoints,
+                                     const float *points,
+                                     const long *idx,
                                      float *out) {
-  gather_by_index_kernel<<<dim3(b, c, 1), opt_n_threads(npoints), 0,
-                           at::cuda::getCurrentCUDAStream()>>>(
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+  gather_by_index_kernel<<<dim3(b, c, 1), opt_n_threads(npoints), 0, stream>>>(
       b, c, n, npoints, points, idx, out);
 
   CUDA_CHECK_ERRORS();
@@ -29,7 +37,10 @@ void gather_by_index_kernel_launcher(int b, int c, int n, int npoints,
 
 // input: grad_out(b, c, m) idx(b, m)
 // output: grad_points(b, c, n)
-__global__ void gather_by_index_grad_kernel(int b, int c, int n, int m,
+__global__ void gather_by_index_grad_kernel(int b,
+                                            int c,
+                                            int n,
+                                            int m,
                                             const float *__restrict__ grad_out,
                                             const long *__restrict__ idx,
                                             float *__restrict__ grad_points) {
@@ -44,11 +55,17 @@ __global__ void gather_by_index_grad_kernel(int b, int c, int n, int m,
   }
 }
 
-void gather_by_index_grad_kernel_launcher(int b, int c, int n, int npoints,
-                                          const float *grad_out, const long *idx,
+void gather_by_index_grad_kernel_launcher(int b,
+                                          int c,
+                                          int n,
+                                          int npoints,
+                                          const float *grad_out,
+                                          const long *idx,
                                           float *grad_points) {
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
   gather_by_index_grad_kernel<<<dim3(b, c, 1), opt_n_threads(npoints), 0,
-                                at::cuda::getCurrentCUDAStream()>>>(
+                                stream>>>(
       b, c, n, npoints, grad_out, idx, grad_points);
 
   CUDA_CHECK_ERRORS();
@@ -56,7 +73,10 @@ void gather_by_index_grad_kernel_launcher(int b, int c, int n, int npoints,
 
 // input: points(b, c, n) idx(b, npoints, nsample)
 // output: out(b, c, npoints, nsample)
-__global__ void group_gather_by_index_kernel(int b, int c, int n, int npoints,
+__global__ void group_gather_by_index_kernel(int b,
+                                             int c,
+                                             int n,
+                                             int npoints,
                                              int nsample,
                                              const float *__restrict__ points,
                                              const long *__restrict__ idx,
@@ -78,9 +98,14 @@ __global__ void group_gather_by_index_kernel(int b, int c, int n, int npoints,
   }
 }
 
-void group_gather_by_index_kernel_launcher(int b, int c, int n, int npoints,
-                                           int nsample, const float *points,
-                                           const long *idx, float *out) {
+void group_gather_by_index_kernel_launcher(int b,
+                                           int c,
+                                           int n,
+                                           int npoints,
+                                           int nsample,
+                                           const float *points,
+                                           const long *idx,
+                                           float *out) {
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
   group_gather_by_index_kernel<<<b, opt_block_config(npoints, c), 0, stream>>>(
@@ -91,11 +116,15 @@ void group_gather_by_index_kernel_launcher(int b, int c, int n, int npoints,
 
 // input: grad_out(b, c, npoints, nsample), idx(b, npoints, nsample)
 // output: grad_points(b, c, n)
-__global__ void group_gather_by_index_grad_kernel(int b, int c, int n, int npoints,
-                                                  int nsample,
-                                                  const float *__restrict__ grad_out,
-                                                  const long *__restrict__ idx,
-                                                  float *__restrict__ grad_points) {
+__global__ void group_gather_by_index_grad_kernel(
+    int b,
+    int c,
+    int n,
+    int npoints,
+    int nsample,
+    const float *__restrict__ grad_out,
+    const long *__restrict__ idx,
+    float *__restrict__ grad_points) {
   int batch_index = blockIdx.x;
   grad_out += batch_index * npoints * nsample * c;
   idx += batch_index * npoints * nsample;
@@ -114,12 +143,18 @@ __global__ void group_gather_by_index_grad_kernel(int b, int c, int n, int npoin
   }
 }
 
-void group_gather_by_index_grad_kernel_launcher(int b, int c, int n, int npoints,
-                                                int nsample, const float *grad_out,
-                                                const long *idx, float *grad_points) {
+void group_gather_by_index_grad_kernel_launcher(int b,
+                                                int c,
+                                                int n,
+                                                int npoints,
+                                                int nsample,
+                                                const float *grad_out,
+                                                const long *idx,
+                                                float *grad_points) {
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-  group_gather_by_index_grad_kernel<<<b, opt_block_config(npoints, c), 0, stream>>>(
+  group_gather_by_index_grad_kernel<<<b, opt_block_config(npoints, c), 0,
+                                      stream>>>(
       b, c, n, npoints, nsample, grad_out, idx, grad_points);
 
   CUDA_CHECK_ERRORS();

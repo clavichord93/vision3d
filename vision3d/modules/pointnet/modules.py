@@ -6,6 +6,13 @@ import torch.nn as nn
 from ...utils.pytorch_utils import create_conv1d_blocks, create_linear_blocks, SmoothCrossEntropyLoss
 
 
+__all__ = [
+    'TNet',
+    'TNetLoss',
+    'PointNetLoss'
+]
+
+
 class TNet(nn.Module):
     def __init__(self, input_dim, output_dims1, output_dims2):
         super(TNet, self).__init__()

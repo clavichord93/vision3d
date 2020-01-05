@@ -1,10 +1,11 @@
 import argparse
+import os
 import os.path as osp
 from tqdm import tqdm
 import time
 
 import torch
-import numpy as np
+import torch.nn as nn
 
 from vision3d.utils.metrics import AccuracyMeter, PartMeanIoUMeter
 from vision3d.engine.engine import Engine
@@ -24,16 +25,13 @@ def make_parser():
     return parser
 
 
-def test_epoch(engine, data_loader, epoch, verbose=False):
-    model = engine.get_cuda_model()
+def test_epoch(engine, data_loader, model, epoch):
     model.eval()
-
     accuracy_meter = AccuracyMeter(config.num_part)
     miou_meter = PartMeanIoUMeter(config.num_class, config.num_part, config.class_id_to_part_ids)
-
+    pbar = tqdm(enumerate(data_loader), total=len(data_loader))
     start_time = time.time()
 
-    pbar = tqdm(enumerate(data_loader), total=len(data_loader))
     for i, batch in pbar:
         points, normals, labels, class_ids = batch
         points = points.cuda()
@@ -43,9 +41,7 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
         prepare_time = time.time() - start_time
 
         outputs = model(points, normals, class_ids)
-        preds = outputs.argmax(dim=1)
-
-        preds = preds.detach().cpu().numpy()
+        preds = outputs.argmax(dim=1).detach().cpu().numpy()
         labels = labels.cpu().numpy()
         class_ids = class_ids.cpu().numpy()
         accuracy_meter.add_results(preds, labels)
@@ -67,16 +63,16 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
               'acc: {:.3f}, '.format(accuracy) + \
               'mIoU (instance): {:.3f}, '.format(instance_miou) + \
               'mIoU (category): {:.3f}'.format(class_miou)
-    engine.log(message)
-    if verbose:
+    engine.logger.info(message)
+    if engine.args.verbose:
         for i in range(config.num_part):
             part_name = config.part_names[i]
             accuracy = accuracy_meter.accuracy_per_class(i)
-            engine.log('  {}, acc: {:.3f}'.format(part_name, accuracy))
+            engine.logger.info('  {}, acc: {:.3f}'.format(part_name, accuracy))
         for i in range(config.num_class):
             class_name = config.class_names[i]
             mean_iou = miou_meter.instance_miou_per_class(i)
-            engine.log('  {}, mIoU: {:.3f}'.format(class_name, mean_iou))
+            engine.logger.info('  {}, mIoU: {:.3f}'.format(class_name, mean_iou))
 
     return accuracy, instance_miou, class_miou
 
@@ -85,16 +81,16 @@ def main():
     parser = make_parser()
     log_file = osp.join(config.logs_dir, 'test-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
     with Engine(log_file=log_file, default_parser=parser, seed=config.seed) as engine:
-        args = engine.args
+        data_loader = test_data_loader(config, engine.args.split)
 
-        data_loader = test_data_loader(config, args.split)
-
-        model = create_model(config.num_class, config.num_part)
+        model = create_model(config.num_class, config.num_part).cuda()
+        if engine.data_parallel:
+            model = nn.DataParallel(model)
         engine.register_state(model=model)
 
         if engine.snapshot is not None:
             engine.load_snapshot(engine.snapshot)
-            test_epoch(engine, data_loader, epoch=engine.state.epoch, verbose=args.verbose)
+            test_epoch(engine, data_loader, model, engine.state.epoch)
         else:
             best_accuracy = 0
             best_accuracy_epoch = -1
@@ -102,10 +98,10 @@ def main():
             best_instance_miou_epoch = -1
             best_class_miou = 0
             best_class_miou_epoch = -1
-            for epoch in range(args.start_epoch, args.end_epoch + 1, args.steps):
+            for epoch in range(engine.args.start_epoch, engine.args.end_epoch + 1, engine.args.steps):
                 snapshot = osp.join(config.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
                 engine.load_snapshot(snapshot)
-                accuracy, instance_miou, class_miou = test_epoch(engine, data_loader, epoch=epoch, verbose=args.verbose)
+                accuracy, instance_miou, class_miou = test_epoch(engine, data_loader, model, epoch)
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     best_accuracy_epoch = epoch
@@ -116,11 +112,11 @@ def main():
                     best_class_miou = class_miou
                     best_class_miou_epoch = epoch
             message = 'Best acc: {:.3f}, best epoch: {}'.format(best_accuracy, best_accuracy_epoch)
-            engine.log(message)
+            engine.logger.info(message)
             message = 'Best instance mIoU: {:.3f}, best epoch: {}'.format(best_instance_miou, best_instance_miou_epoch)
-            engine.log(message)
+            engine.logger.info(message)
             message = 'Best category mIoU: {:.3f}, best epoch: {}'.format(best_class_miou, best_class_miou_epoch)
-            engine.log(message)
+            engine.logger.info(message)
 
 
 if __name__ == '__main__':

@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -34,12 +36,8 @@ class SmoothCrossEntropyLoss(nn.Module):
 
     def forward(self, preds, labels):
         device = preds.device
-        one_hot = torch.zeros_like(preds).to(device)
-        one_hot = one_hot.scatter(1, labels.unsqueeze(1), 1)
-        num_class = preds.shape[1]
-        weight = 1. - num_class / (num_class - 1) * self.eps
-        bias = self.eps / (num_class - 1)
-        labels = one_hot * weight + bias
+        one_hot = torch.zeros_like(preds).to(device).scatter(1, labels.unsqueeze(1), 1)
+        labels = one_hot * (1 - self.eps) + self.eps / preds.shape[1]
         log_probs = F.log_softmax(preds, dim=1)
         loss = -(labels * log_probs).sum(dim=1).mean()
         return loss

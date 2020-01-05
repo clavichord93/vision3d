@@ -25,7 +25,7 @@ class AbsoluteRelativePositionEmbedding(nn.Module):
         num_point = points.shape[2]
         dilation = self.base_dilation * num_point // self.base_num_point
         neighbors = F.dilated_k_nearest_neighbors(points, self.num_neighbor, dilation)
-        points = points.unsqueeze(2).repeat(1, 1, 1, self.num_neighbor)
+        points = points.unsqueeze(3).repeat(1, 1, 1, self.num_neighbor)
         points = torch.cat([points, neighbors - points], dim=1)
         points = self.pointnet1(points)
         points, _ = points.max(dim=2)
@@ -59,11 +59,15 @@ class GroupShuffleAttention(nn.Module):
 
 
 class GumbelSubsetSampling(nn.Module):
-    def __init__(self, input_dim, num_sample, tau, hard):
+    r"""
+    Gumbel Subset Sampling proposed in `Modeling Point Clouds with Self-Attention and Gumbel Subset Sampling`.
+
+    Use soft sampling in training and hard sampling in testing.
+    """
+    def __init__(self, input_dim, num_sample, tau):
         super(GumbelSubsetSampling, self).__init__()
         self.num_sample = num_sample
         self.tau = tau
-        self.hard = hard
         self.layer = nn.Conv1d(input_dim, num_sample, kernel_size=1)
 
     def forward(self, points):
@@ -71,3 +75,19 @@ class GumbelSubsetSampling(nn.Module):
         weight = nn.functional.gumbel_softmax(weight, tau=self.tau, hard=self.hard, dim=2).transpose(1, 2)
         points = torch.matmul(points, weight)
         return points
+
+    @property
+    def hard(self):
+        return not self.training
+
+
+class ElementwiseLoss(nn.Module):
+    def __init__(self):
+        super(ElementwiseLoss, self).__init__()
+        self.cls_loss = nn.CrossEntropyLoss()
+
+    def forward(self, preds, labels):
+        num_point = preds.shape[2]
+        labels = labels.unsqueeze(1).repeat(1, num_point)
+        cls_loss = self.cls_loss(preds, labels)
+        return cls_loss

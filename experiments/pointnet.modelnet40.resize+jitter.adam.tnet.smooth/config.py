@@ -47,7 +47,6 @@ config.test_num_worker = 8
 
 # optim config
 config.learning_rate = 0.001
-config.momentum = 0.9
 config.weight_decay = 1e-4
 config.max_epoch = 100
 config.steps = 20

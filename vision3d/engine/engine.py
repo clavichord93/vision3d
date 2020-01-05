@@ -1,14 +1,13 @@
+from collections import OrderedDict
 import os
 import argparse
-import logging
 import random
 
 import torch
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import numpy as np
 
-from vision3d.engine.logger import create_logger
+from .logger import create_logger
 
 
 class State(object):
@@ -27,6 +26,7 @@ class State(object):
 
 class Engine(object):
     def __init__(self, log_file=None, default_parser=None, seed=None):
+        self.logger = create_logger(log_file=log_file)
         self.parser = default_parser
         self.inject_default_parser()
         self.args = self.parser.parse_args()
@@ -39,9 +39,12 @@ class Engine(object):
             raise RuntimeError('No CUDA devices available.')
         self.num_device = torch.cuda.device_count()
         self.data_parallel = self.num_device > 1
+        if self.data_parallel:
+            self.logger.info('Using DataParallel mode ({} GPUs available).'.format(self.num_device))
+        else:
+            self.logger.info('Using Single-GPU mode.')
 
         self.state = State()
-        self.logger = create_logger(output_file=log_file)
 
         self.seed = seed
         self.initialize()
@@ -64,57 +67,72 @@ class Engine(object):
     def register_state(self, **kwargs):
         self.state.register(**kwargs)
 
-    def get_cuda_model(self):
-        model = self.state.model
-        if self.data_parallel:
-            self.log('Using DataParallel mode ({} GPUs available).'.format(self.num_device))
-            model = nn.DataParallel(model).cuda()
-        else:
-            self.log('Using Single-GPU mode.')
-            model = model.cuda()
-        return model
-
     def save_snapshot(self, file_path):
+        model_state_dict = self.state.model.state_dict()
+
+        if self.data_parallel:
+            new_model_state_dict = OrderedDict()
+            for key, value in model_state_dict.items():
+                new_key = key[7:]
+                new_model_state_dict[new_key] = value
+            model_state_dict = new_model_state_dict
+
         state_dict = {
             'epoch': self.state.epoch,
             'iteration': self.state.iteration,
-            'model': self.state.model.state_dict(),
+            'model': model_state_dict,
             'optimizer': self.state.optimizer.state_dict()
         }
         torch.save(state_dict, file_path)
-        self.log('Snapshot saved to "{}"'.format(file_path))
+        self.logger.info('Snapshot saved to "{}"'.format(file_path))
 
     def load_snapshot(self, snapshot):
-        state_dict = torch.load(snapshot)
+        state_dict = torch.load(snapshot, map_location=torch.device('cpu'))
 
-        self.log('Loading from "{}".'.format(snapshot))
+        self.logger.info('Loading from "{}".'.format(snapshot))
 
         if 'epoch' in state_dict:
             epoch = state_dict['epoch']
             self.state.epoch = state_dict['epoch']
-            self.log('Epoch has been loaded: {}.'.format(epoch))
+            self.logger.info('Epoch has been loaded: {}.'.format(epoch))
 
         if 'iteration' in state_dict:
             iteration = state_dict['iteration']
             self.state.iteration = state_dict['iteration']
-            self.log('Iteration has been loaded: {}.'.format(iteration))
+            self.logger.info('Iteration has been loaded: {}.'.format(iteration))
 
         if 'model' in state_dict:
-            self.state.model.load_state_dict(state_dict['model'])
-            self.log('Model has been loaded.')
+            self.load_model(state_dict['model'])
+            self.logger.info('Model has been loaded.')
 
         if 'optimizer' in state_dict and self.state.optimizer is not None:
             self.state.optimizer.load_state_dict(state_dict['optimizer'])
-            self.log('Optimizer has been loaded.')
+            self.logger.info('Optimizer has been loaded.')
 
-        self.log('Snapshot loaded.')
+        self.logger.info('Snapshot loaded.')
+
+    def load_model(self, state_dict):
+        if self.data_parallel:
+            state_dict = OrderedDict([('module.' + key, value) for key, value in state_dict.items()])
+        self.state.model.load_state_dict(state_dict, strict=False)
+
+        snapshot_keys = set(state_dict.keys())
+        model_keys = set(self.state.model.state_dict().keys())
+        missing_keys = model_keys - snapshot_keys
+        unexpected_keys = snapshot_keys - model_keys
+        if self.data_parallel:
+            missing_keys = set([missing_key[7:] for missing_key in missing_keys])
+            unexpected_keys = set([unexpected_key[7:] for unexpected_key in unexpected_keys])
+
+        if len(missing_keys) > 0:
+            message = 'Missing keys: {}'.format(missing_keys)
+            self.logger.warning(message)
+        if len(unexpected_keys) > 0:
+            message = 'Unexpected keys: {}'.format(unexpected_keys)
+            self.logger.warning(message)
 
     def step(self):
         self.state.iteration += 1
-
-    def log(self, message, level='INFO'):
-        level = logging.getLevelName(level)
-        self.logger.log(level, message)
 
     def __enter__(self):
         return self
