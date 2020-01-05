@@ -18,6 +18,7 @@ def make_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--start_epoch', metavar='S', default=0, type=int, help='start epoch')
     parser.add_argument('--end_epoch', metavar='E', default=config.max_epoch-1, type=int, help='end epoch')
+    parser.add_argument('--steps', metavar='N', type=int, default=1, help='epoch steps for testing')
     parser.add_argument('--verbose', action='store_true', help='verbose mode')
     parser.add_argument('--tensorboardx', action='store_true', help='use tensorboardX')
     return parser
@@ -77,7 +78,7 @@ def main():
         else:
             best_accuracy = 0
             best_epoch = -1
-            for epoch in range(engine.args.start_epoch, engine.args.end_epoch + 1):
+            for epoch in range(engine.args.start_epoch, engine.args.end_epoch + 1, engine.args.steps):
                 snapshot = osp.join(config.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
                 engine.load_snapshot(snapshot)
                 accuracy = test_epoch(engine, data_loader, model, epoch)
