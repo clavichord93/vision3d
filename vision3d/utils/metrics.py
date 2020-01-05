@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class OverallAccuracy(object):
+class AccuracyMeter(object):
     def __init__(self, num_class):
         self.num_class = num_class
         self.num_correct = 0
@@ -23,11 +23,14 @@ class OverallAccuracy(object):
     def accuracy(self):
         return self.num_correct / self.num_record
 
+    def mean_accuracy(self):
+        return np.mean([self.num_correct_per_class[i] / self.num_record_per_class[i] for i in range(self.num_class)])
+
     def accuracy_per_class(self, class_id):
         return self.num_correct_per_class[class_id] / self.num_record_per_class[class_id]
 
 
-class PartMeanIoU(object):
+class PartMeanIoUMeter(object):
     r"""
     Mean IoU (Intersect over Union) metric for Part Segmentation task.
     """

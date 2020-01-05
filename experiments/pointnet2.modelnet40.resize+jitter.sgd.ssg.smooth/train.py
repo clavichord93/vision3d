@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from vision3d.utils.metrics import OverallAccuracy
+from vision3d.utils.metrics import AccuracyMeter
 from vision3d.engine.engine import Engine
 from vision3d.utils.pytorch_utils import SmoothCrossEntropyLoss
 from dataset import train_data_loader
@@ -53,7 +53,7 @@ def main():
         num_iter_per_epoch = len(data_loader)
 
         for epoch in range(last_epoch + 1, config.max_epoch):
-            oa_metric = OverallAccuracy(config.num_class)
+            accuracy_meter = AccuracyMeter(config.num_class)
 
             start_time = time.time()
 
@@ -75,7 +75,7 @@ def main():
 
                 preds = outputs.argmax(dim=1).detach().cpu().numpy()
                 labels = labels.cpu().numpy()
-                oa_metric.add_results(preds, labels)
+                accuracy_meter.add_results(preds, labels)
 
                 process_time = time.time() - start_time - prepare_time
 
@@ -92,7 +92,7 @@ def main():
 
                 start_time = time.time()
 
-            message = 'Epoch {}, acc: {:.3f}'.format(epoch, oa_metric.accuracy())
+            message = 'Epoch {}, acc: {:.3f}'.format(epoch, accuracy_meter.accuracy())
             engine.log(message)
 
             engine.register_state(epoch=epoch)

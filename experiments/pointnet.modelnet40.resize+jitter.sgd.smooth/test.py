@@ -5,7 +5,7 @@ import time
 
 import torch
 
-from vision3d.utils.metrics import OverallAccuracy
+from vision3d.utils.metrics import AccuracyMeter
 from vision3d.engine.engine import Engine
 from dataset import test_data_loader
 from config import config
@@ -25,7 +25,7 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
     model = engine.get_cuda_model()
     model.eval()
 
-    oa_metric = OverallAccuracy(config.num_class)
+    accuracy_meter = AccuracyMeter(config.num_class)
 
     start_time = time.time()
 
@@ -41,7 +41,7 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
 
         preds = preds.detach().cpu().numpy()
         labels = labels.numpy()
-        oa_metric.add_results(preds, labels)
+        accuracy_meter.add_results(preds, labels)
 
         process_time = time.time() - start_time - prepare_time
 
@@ -50,14 +50,14 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
 
         start_time = time.time()
 
-    accuracy = oa_metric.accuracy()
+    accuracy = accuracy_meter.accuracy()
 
     message = 'Epoch {}, acc: {:.3f}'.format(epoch, accuracy)
     engine.log(message)
     if verbose:
         for i in range(config.num_class):
             class_name = config.class_names[i]
-            accuracy = oa_metric.accuracy_per_class(i)
+            accuracy = accuracy_meter.accuracy_per_class(i)
             engine.log('  {}: {:.3f}'.format(class_name, accuracy))
 
     return accuracy

@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from vision3d.utils.metrics import OverallAccuracy, PartMeanIoU
+from vision3d.utils.metrics import AccuracyMeter, PartMeanIoUMeter
 from vision3d.engine.engine import Engine
 from vision3d.utils.pytorch_utils import SmoothCrossEntropyLoss
 from dataset import train_data_loader
@@ -55,8 +55,8 @@ def main():
         num_iter_per_epoch = len(data_loader)
 
         for epoch in range(last_epoch + 1, config.max_epoch):
-            oa_metric = OverallAccuracy(config.num_part)
-            miou_metric = PartMeanIoU(config.num_class, config.num_part, config.class_id_to_part_ids)
+            accuracy_meter = AccuracyMeter(config.num_part)
+            miou_meter = PartMeanIoUMeter(config.num_class, config.num_part, config.class_id_to_part_ids)
 
             start_time = time.time()
 
@@ -81,8 +81,8 @@ def main():
                 preds = outputs.argmax(dim=1).detach().cpu().numpy()
                 labels = labels.cpu().numpy()
                 class_ids = class_ids.cpu().numpy()
-                oa_metric.add_results(preds, labels)
-                miou_metric.add_results(preds, labels, class_ids)
+                accuracy_meter.add_results(preds, labels)
+                miou_meter.add_results(preds, labels, class_ids)
 
                 process_time = time.time() - start_time - prepare_time
 
@@ -100,9 +100,9 @@ def main():
                 start_time = time.time()
 
             message = 'Epoch {}, '.format(epoch) + \
-                      'acc: {:.3f}, '.format(oa_metric.accuracy()) + \
-                      'mIoU (instance): {:.3f}, '.format(miou_metric.instance_miou()) + \
-                      'mIoU (category): {:.3f}'.format(miou_metric.class_miou())
+                      'acc: {:.3f}, '.format(accuracy_meter.accuracy()) + \
+                      'mIoU (instance): {:.3f}, '.format(miou_meter.instance_miou()) + \
+                      'mIoU (category): {:.3f}'.format(miou_meter.class_miou())
             engine.log(message)
 
             engine.register_state(epoch=epoch)

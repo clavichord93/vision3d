@@ -6,7 +6,7 @@ import time
 import torch
 import numpy as np
 
-from vision3d.utils.metrics import OverallAccuracy, PartMeanIoU
+from vision3d.utils.metrics import AccuracyMeter, PartMeanIoUMeter
 from vision3d.engine.engine import Engine
 from dataset import test_data_loader
 from config import config
@@ -28,8 +28,8 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
     model = engine.get_cuda_model()
     model.eval()
 
-    oa_metric = OverallAccuracy(config.num_part)
-    miou_metric = PartMeanIoU(config.num_class, config.num_part, config.class_id_to_part_ids)
+    accuracy_meter = AccuracyMeter(config.num_part)
+    miou_meter = PartMeanIoUMeter(config.num_class, config.num_part, config.class_id_to_part_ids)
 
     start_time = time.time()
 
@@ -48,8 +48,8 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
         preds = preds.detach().cpu().numpy()
         labels = labels.cpu().numpy()
         class_ids = class_ids.cpu().numpy()
-        oa_metric.add_results(preds, labels)
-        miou_metric.add_results(preds, labels, class_ids)
+        accuracy_meter.add_results(preds, labels)
+        miou_meter.add_results(preds, labels, class_ids)
 
         process_time = time.time() - start_time - prepare_time
 
@@ -59,9 +59,9 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
 
         start_time = time.time()
 
-    accuracy = oa_metric.accuracy()
-    instance_miou = miou_metric.instance_miou()
-    class_miou = miou_metric.class_miou()
+    accuracy = accuracy_meter.accuracy()
+    instance_miou = miou_meter.instance_miou()
+    class_miou = miou_meter.class_miou()
 
     message = 'Epoch {}, '.format(epoch) + \
               'acc: {:.3f}, '.format(accuracy) + \
@@ -71,11 +71,11 @@ def test_epoch(engine, data_loader, epoch, verbose=False):
     if verbose:
         for i in range(config.num_part):
             part_name = config.part_names[i]
-            accuracy = oa_metric.accuracy_per_class(i)
+            accuracy = accuracy_meter.accuracy_per_class(i)
             engine.log('  {}, acc: {:.3f}'.format(part_name, accuracy))
         for i in range(config.num_class):
             class_name = config.class_names[i]
-            mean_iou = miou_metric.instance_miou_per_class(i)
+            mean_iou = miou_meter.instance_miou_per_class(i)
             engine.log('  {}, mIoU: {:.3f}'.format(class_name, mean_iou))
 
     return accuracy, instance_miou, class_miou
