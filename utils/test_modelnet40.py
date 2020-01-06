@@ -36,10 +36,11 @@ def test_epoch(engine, data_loader, model, epoch):
 
         prepare_time = time.time() - start_time
 
-        outputs = model(points)
-        preds = outputs.argmax(dim=1).detach().cpu().numpy()
-        labels = labels.numpy()
-        accuracy_meter.add_results(preds, labels)
+        with torch.no_grad():
+            outputs = model(points)
+            preds = outputs.argmax(dim=1).detach().cpu().numpy()
+            labels = labels.numpy()
+            accuracy_meter.add_results(preds, labels)
 
         process_time = time.time() - start_time - prepare_time
 

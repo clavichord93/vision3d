@@ -44,10 +44,16 @@ def create_pat_conv2d_blocks(input_dim, output_dims, groups, dropout=None):
     return layers
 
 
-def dilated_k_nearest_neighbors(points, num_neighbor, dilation):
-    # TODO: dilated kNN, it is currently kNN
-    _, index = k_nearest_neighbors(points, points, num_neighbor + 1)
-    # ignore the nearest point (itself)
-    index = index[:, :, 1:].contiguous()
+def k_nearest_neighbors_graph(points, num_neighbor, dilation=None):
+    if dilation > 1:
+        device = points.device
+        num_dilated_neighbor = num_neighbor * dilation
+        _, index = k_nearest_neighbors(points, points, num_dilated_neighbor + 1)
+        # ignore the nearest point (itself)
+        sample_index = torch.randperm(num_dilated_neighbor)[:num_neighbor].to(device)
+        index = index[:, :, 1:].index_select(dim=2, index=sample_index).contiguous()
+    else:
+        _, index = k_nearest_neighbors(points, points, num_neighbor + 1)
+        index = index[:, :, 1:].contiguous()
     points = F.group_gather_by_index(points, index)
     return points

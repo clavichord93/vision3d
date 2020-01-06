@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import sys
 import os
 import argparse
 import random
@@ -25,16 +26,21 @@ class State(object):
 
 
 class Engine(object):
-    def __init__(self, log_file=None, default_parser=None, seed=None):
-        self.logger = create_logger(log_file=log_file)
+    def __init__(self, log_file=None, default_parser=None, seed=None, cudnn_deterministic=False):
+        # parser, logger, state
         self.parser = default_parser
         self.inject_default_parser()
         self.args = self.parser.parse_args()
         self.devices = self.args.devices
         self.snapshot = self.args.snapshot
+        self.logger = create_logger(log_file=log_file)
+        self.state = State()
 
+        message = 'Command executed: {}'.format(' '.join(sys.argv))
+        self.logger.info(message)
+
+        # cuda
         os.environ['CUDA_VISIBLE_DEVICES'] = self.devices
-
         if not torch.cuda.is_available():
             raise RuntimeError('No CUDA devices available.')
         self.num_device = torch.cuda.device_count()
@@ -43,9 +49,9 @@ class Engine(object):
             self.logger.info('Using DataParallel mode ({} GPUs available).'.format(self.num_device))
         else:
             self.logger.info('Using Single-GPU mode.')
+        self.cudnn_deterministic = cudnn_deterministic
 
-        self.state = State()
-
+        # random seed & deterministic
         self.seed = seed
         self.initialize()
 
@@ -60,22 +66,19 @@ class Engine(object):
             random.seed(self.seed)
             torch.manual_seed(self.seed)
             np.random.seed(self.seed)
-        cudnn.benchmark = True
-        # cudnn.benchmark = False
-        # cudnn.deterministic = True
+        if self.cudnn_deterministic:
+            cudnn.benchmark = False
+            cudnn.deterministic = True
+        else:
+            cudnn.benchmark = True
 
     def register_state(self, **kwargs):
         self.state.register(**kwargs)
 
     def save_snapshot(self, file_path):
         model_state_dict = self.state.model.state_dict()
-
         if self.data_parallel:
-            new_model_state_dict = OrderedDict()
-            for key, value in model_state_dict.items():
-                new_key = key[7:]
-                new_model_state_dict[new_key] = value
-            model_state_dict = new_model_state_dict
+            model_state_dict = OrderedDict([(key[7:], value) for key, value in model_state_dict.items()])
 
         state_dict = {
             'epoch': self.state.epoch,
@@ -102,7 +105,7 @@ class Engine(object):
             self.logger.info('Iteration has been loaded: {}.'.format(iteration))
 
         if 'model' in state_dict:
-            self.load_model(state_dict['model'])
+            self._load_model(state_dict['model'])
             self.logger.info('Model has been loaded.')
 
         if 'optimizer' in state_dict and self.state.optimizer is not None:
@@ -111,7 +114,7 @@ class Engine(object):
 
         self.logger.info('Snapshot loaded.')
 
-    def load_model(self, state_dict):
+    def _load_model(self, state_dict):
         if self.data_parallel:
             state_dict = OrderedDict([('module.' + key, value) for key, value in state_dict.items()])
         self.state.model.load_state_dict(state_dict, strict=False)
@@ -137,5 +140,8 @@ class Engine(object):
     def __enter__(self):
         return self
 
-    def __exit__(self, type_, value_, trace_):
+    def __exit__(self, exc_type, exc_value, traceback):
         torch.cuda.empty_cache()
+        if exc_type is not None:
+            message = 'Error: {}'.format(exc_value)
+            self.logger.error(message)

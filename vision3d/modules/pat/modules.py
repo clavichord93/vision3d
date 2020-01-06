@@ -5,14 +5,32 @@ import torch
 import torch.nn as nn
 
 from . import functional as F
+from ...utils.pytorch_utils import SmoothCrossEntropyLoss
+
+
+__all__ = [
+    'AbsoluteRelativePositionEmbedding',
+    'GroupShuffleAttention',
+    'GumbelSubsetSampling',
+    'AttentionSubsetSampling',
+    'ElementwiseLoss'
+]
 
 
 class AbsoluteRelativePositionEmbedding(nn.Module):
-    def __init__(self, input_dim, output_dims1, output_dims2, num_neighbor, base_dilation=2, base_num_point=1024):
+    def __init__(self,
+                 input_dim,
+                 output_dims1,
+                 output_dims2,
+                 num_neighbor,
+                 use_dilated_knn=False,
+                 base_dilation=2,
+                 base_num=1024):
         super(AbsoluteRelativePositionEmbedding, self).__init__()
         self.num_neighbor = num_neighbor
+        self.use_dilated_knn = use_dilated_knn
         self.base_dilation = base_dilation
-        self.base_num_point = base_num_point
+        self.base_num = base_num
 
         layers = F.create_pat_conv2d_blocks(input_dim, output_dims1, groups=8)
         self.pointnet1 = nn.Sequential(OrderedDict(layers))
@@ -21,10 +39,16 @@ class AbsoluteRelativePositionEmbedding(nn.Module):
         layers = F.create_pat_conv1d_blocks(input_dim, output_dims2, groups=8)
         self.pointnet2 = nn.Sequential(OrderedDict(layers))
 
+    def dilation(self, num_point):
+        if self.use_dilated_knn:
+            return max(self.base_dilation * num_point // self.base_num, 1)
+        else:
+            return 1
+
     def forward(self, points):
         num_point = points.shape[2]
-        dilation = self.base_dilation * num_point // self.base_num_point
-        neighbors = F.dilated_k_nearest_neighbors(points, self.num_neighbor, dilation)
+        dilation = self.dilation(num_point)
+        neighbors = F.k_nearest_neighbors_graph(points, self.num_neighbor, dilation=dilation)
         points = points.unsqueeze(3).repeat(1, 1, 1, self.num_neighbor)
         points = torch.cat([points, neighbors - points], dim=1)
         points = self.pointnet1(points)
@@ -38,7 +62,7 @@ class GroupShuffleAttention(nn.Module):
         super(GroupShuffleAttention, self).__init__()
         self.num_group = num_group
         self.conv = nn.Conv1d(feature_dim, feature_dim, kernel_size=1, groups=num_group)
-        self.norm = nn.GroupNorm(num_group, feature_dim)
+        self.gn = nn.GroupNorm(num_group, feature_dim)
 
     def forward(self, points):
         identity = points
@@ -53,7 +77,7 @@ class GroupShuffleAttention(nn.Module):
         points = torch.matmul(points, attention)
         points = points.transpose(1, 2).contiguous().view(batch_size, num_channel, num_point)
         points += identity
-        points = self.norm(points)
+        points = self.gn(points)
 
         return points
 
@@ -81,10 +105,26 @@ class GumbelSubsetSampling(nn.Module):
         return not self.training
 
 
+class AttentionSubsetSampling(nn.Module):
+    def __init__(self, input_dim, num_sample):
+        super(AttentionSubsetSampling, self).__init__()
+        self.num_sample = num_sample
+        self.layer = nn.Conv1d(input_dim, num_sample, kernel_size=1)
+
+    def forward(self, points):
+        weight = self.layer(points)
+        weight = nn.functional.softmax(weight, dim=2).transpose(1, 2)
+        points = torch.matmul(points, weight)
+        return points
+
+
 class ElementwiseLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, label_smoothing_eps=None):
         super(ElementwiseLoss, self).__init__()
-        self.cls_loss = nn.CrossEntropyLoss()
+        if label_smoothing_eps is None:
+            self.cls_loss = nn.CrossEntropyLoss()
+        else:
+            self.cls_loss = SmoothCrossEntropyLoss(eps=label_smoothing_eps)
 
     def forward(self, preds, labels):
         num_point = preds.shape[2]
