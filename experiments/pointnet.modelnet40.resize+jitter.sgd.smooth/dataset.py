@@ -14,6 +14,7 @@ class TrainTransform(object):
 
     def __call__(self, points):
         points = F.sample_point_cloud(points, self.num_point)
+        points = F.normalize_point_cloud(points)
         points = F.random_shuffle_point_cloud(points)
         points = F.random_rescale_point_cloud(points, self.low, self.high)
         points = F.random_jitter_point_cloud(points, self.sigma)
@@ -24,9 +25,12 @@ class TrainTransform(object):
     def __repr__(self):
         format_string = self.__class__.__name__ + '(\n'
         format_string += '    SamplePointCloud(num_point={})\n'.format(self.num_point)
+        format_string += '    NormalizePointCloud()\n'
         format_string += '    RandomShufflePointCloud()\n'
         format_string += '    RandomRescalePointCloud(low={}, high={})\n'.format(self.low, self.high)
         format_string += '    RandomJitterPointCloud(sigma={})\n'.format(self.sigma)
+        format_string += '    TransposePointCloud()\n'
+        format_string += '    ToTensor()\n'
         format_string += ')'
         return format_string
 
@@ -37,6 +41,7 @@ class TestTransform(object):
 
     def __call__(self, points):
         points = F.sample_point_cloud(points, self.num_point)
+        points = F.normalize_point_cloud(points)
         points = points.transpose()
         points = torch.tensor(points, dtype=torch.float)
         return points
@@ -44,6 +49,9 @@ class TestTransform(object):
     def __repr__(self):
         format_string = self.__class__.__name__ + '(\n'
         format_string += '    SamplePointCloud(num_point={})\n'.format(self.num_point)
+        format_string += '    NormalizePointCloud()\n'
+        format_string += '    TransposePointCloud()\n'
+        format_string += '    ToTensor()\n'
         format_string += ')'
         return format_string
 

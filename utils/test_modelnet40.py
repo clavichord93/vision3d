@@ -24,7 +24,7 @@ def make_parser():
     return parser
 
 
-def test_epoch(engine, data_loader, model, epoch):
+def test_one_epoch(engine, data_loader, model, epoch):
     model.eval()
     accuracy_meter = AccuracyMeter(config.num_class)
     pbar = tqdm(enumerate(data_loader), total=len(data_loader))
@@ -75,14 +75,14 @@ def main():
 
         if engine.snapshot is not None:
             engine.load_snapshot(engine.snapshot)
-            test_epoch(engine, data_loader, model, engine.state.epoch)
+            test_one_epoch(engine, data_loader, model, engine.state.epoch)
         else:
             best_accuracy = 0
             best_epoch = -1
             for epoch in range(engine.args.start_epoch, engine.args.end_epoch + 1, engine.args.steps):
                 snapshot = osp.join(config.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
                 engine.load_snapshot(snapshot)
-                accuracy = test_epoch(engine, data_loader, model, epoch)
+                accuracy = test_one_epoch(engine, data_loader, model, epoch)
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     best_epoch = epoch

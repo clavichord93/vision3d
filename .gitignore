@@ -9,7 +9,7 @@ vision3d/dist
 # exclude project files
 output
 experiments/*
-vision3d/datasets/stanford3d.py
+vision3d/datasets/s3dis.py
 vision3d/modules/interpcnn
 vision3d/modules/transformer
 

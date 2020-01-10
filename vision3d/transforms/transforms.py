@@ -72,10 +72,10 @@ class RandomDropoutPointCloud(object):
         points, features = inputs
         num_point = points.shape[0]
         dropout_ratio = np.random.rand(num_point) * self.max_dropout_ratio
-        dropped_indices = np.nonzero(np.random.rand(num_point) < dropout_ratio)[0]
-        points[dropped_indices, :] = points[0, :]
+        dropped_index = np.nonzero(np.random.rand(num_point) < dropout_ratio)[0]
+        points[dropped_index, :] = points[0, :]
         if features is not None:
-            features[dropped_indices, :] = features[0, :]
+            features[dropped_index, :] = features[0, :]
         return points, features
 
     def __repr__(self):

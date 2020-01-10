@@ -22,7 +22,7 @@ def make_parser():
     return parser
 
 
-def train_epoch(engine, data_loader, model, loss_func, optimizer, scheduler, epoch):
+def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler, epoch):
     model.train()
     accuracy_meter = AccuracyMeter(config.num_class)
     num_iter_per_epoch = len(data_loader)
@@ -96,7 +96,7 @@ def main():
         scheduler = optim.lr_scheduler.StepLR(optimizer, config.steps, gamma=config.gamma, last_epoch=last_epoch)
 
         for epoch in range(last_epoch + 1, config.max_epoch):
-            train_epoch(engine, data_loader, model, loss_func, optimizer, scheduler, epoch)
+            train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler, epoch)
 
 
 if __name__ == '__main__':

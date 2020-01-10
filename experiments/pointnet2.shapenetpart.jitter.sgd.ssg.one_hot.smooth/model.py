@@ -14,13 +14,13 @@ class PointNet2(nn.Module):
         self.num_part = num_part
 
         # SA module
-        self.sa_module1 = SetAbstractionModule(input_dim=6,
-                                               output_dims=[64, 64, 128],
+        self.sa_module1 = SetAbstractionModule(in_channels=6,
+                                               out_channels_list=[64, 64, 128],
                                                num_centroid=512,
                                                num_sample=64,
                                                radius=0.2)
-        self.sa_module2 = SetAbstractionModule(input_dim=131,
-                                               output_dims=[128, 128, 256],
+        self.sa_module2 = SetAbstractionModule(in_channels=131,
+                                               out_channels_list=[128, 128, 256],
                                                num_centroid=128,
                                                num_sample=64,
                                                radius=0.4)

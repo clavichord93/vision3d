@@ -47,7 +47,7 @@ config.test_num_worker = 8
 
 # optim config
 config.learning_rate = 0.1
-config.eta_min = 0.001
+config.eta_min = config.learning_rate * 1e-2
 config.momentum = 0.9
 config.weight_decay = 1e-4
 config.max_epoch = 250

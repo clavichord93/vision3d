@@ -48,21 +48,25 @@ class AbsoluteRelativePositionEmbedding(nn.Module):
     def forward(self, points):
         num_point = points.shape[2]
         dilation = self.dilation(num_point)
-        neighbors = F.k_nearest_neighbors_graph(points, self.num_neighbor, dilation=dilation)
-        points = points.unsqueeze(3).repeat(1, 1, 1, self.num_neighbor)
+        neighbors = F.k_nearest_neighbors_graph(points, self.num_neighbor, dilation=dilation, training=self.training)
+        num_neighbor = neighbors.shape[3]
+        points = points.unsqueeze(3).repeat(1, 1, 1, num_neighbor)
         points = torch.cat([points, neighbors - points], dim=1)
         points = self.pointnet1(points)
-        points, _ = points.max(dim=2)
+        points, _ = points.max(dim=3)
         points = self.pointnet2(points)
         return points
 
 
 class GroupShuffleAttention(nn.Module):
-    def __init__(self, feature_dim, num_group):
+    def __init__(self, feature_dim, groups, dropout=None):
         super(GroupShuffleAttention, self).__init__()
-        self.num_group = num_group
-        self.conv = nn.Conv1d(feature_dim, feature_dim, kernel_size=1, groups=num_group)
-        self.gn = nn.GroupNorm(num_group, feature_dim)
+        self.num_group = groups
+        self.has_dropout = dropout is not None
+        self.conv = nn.Conv1d(feature_dim, feature_dim, kernel_size=1, groups=groups)
+        self.gn = nn.GroupNorm(groups, feature_dim)
+        if self.has_dropout:
+            self.dp = nn.Dropout(dropout)
 
     def forward(self, points):
         identity = points
@@ -73,6 +77,8 @@ class GroupShuffleAttention(nn.Module):
         queries = points.transpose(2, 3)
         attention = torch.matmul(queries, points) / math.sqrt(num_channel_per_group)
         attention = nn.functional.softmax(attention, dim=2)
+        if self.has_dropout:
+            attention = self.dp(attention)
         points = nn.functional.elu(points)
         points = torch.matmul(points, attention)
         points = points.transpose(1, 2).contiguous().view(batch_size, num_channel, num_point)

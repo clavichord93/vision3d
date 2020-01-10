@@ -56,6 +56,6 @@ def random_shuffle_point_cloud(points):
 def random_dropout_point_cloud(points, max_dropout_ratio):
     num_point = points.shape[0]
     dropout_ratio = np.random.rand(num_point) * max_dropout_ratio
-    dropped_indices = np.nonzero(np.random.rand(num_point) < dropout_ratio)[0]
-    points[dropped_indices, :] = points[0, :]
+    dropped_index = np.nonzero(np.random.rand(num_point) < dropout_ratio)[0]
+    points[dropped_index, :] = points[0, :]
     return points

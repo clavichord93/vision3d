@@ -100,12 +100,12 @@ class _ShapeNetPartDatasetBase(torch.utils.data.Dataset):
     }
 
 
-def get_part_id(synset, index):
+def _get_part_id(synset, index):
     class_name = _ShapeNetPartDatasetBase.synset_to_class_name[synset]
     return _ShapeNetPartDatasetBase.class_name_to_part_ids[class_name][index - 1]
 
 
-def get_class_id(synset):
+def _get_class_id(synset):
     class_name = _ShapeNetPartDatasetBase.synset_to_class_name[synset]
     return _ShapeNetPartDatasetBase.class_names.index(class_name)
 
@@ -147,7 +147,7 @@ def preprocess(root):
                     labels = [int(split_line[-1].split('.')[0]) for split_line in split_lines]
                     all_labels.append(np.array(labels, dtype=np.int))
 
-                    class_id = get_class_id(synset)
+                    class_id = _get_class_id(synset)
                     all_class_ids.append(class_id)
                 num_point = len(points)
                 max_num_point = max(max_num_point, num_point)
@@ -164,10 +164,8 @@ def preprocess(root):
                              'labels': data_dict['train']['labels'] + data_dict['val']['labels'],
                              'class_ids': data_dict['train']['class_ids'] + data_dict['val']['class_ids']}
 
-    pickle_root = osp.join(root, 'pickle')
-    ensure_dir(pickle_root)
     for split in ['train', 'val', 'trainval', 'test']:
-        dump_file = osp.join(pickle_root, '{}.pickle'.format(split))
+        dump_file = osp.join(root, '{}.pickle'.format(split))
         with open(dump_file, 'wb') as f:
             pickle.dump(data_dict[split], f)
             print('"{}" saved.'.format(dump_file))
@@ -179,25 +177,29 @@ class ShapeNetPartDataset(_ShapeNetPartDatasetBase):
             raise ValueError('Invalid split "{}"!'.format(split))
         super(ShapeNetPartDataset, self).__init__()
 
-        dump_file = osp.join(root, 'pickle', '{}.pickle'.format(split))
+        dump_file = osp.join(root, '{}.pickle'.format(split))
         with open(dump_file, 'rb') as f:
             data_dict = pickle.load(f)
 
-        self.points = data_dict['points']
-        self.normals = data_dict['normals']
-        self.labels = data_dict['labels']
-        self.class_ids = data_dict['class_ids']
         self.transform = transform
-        self.num_shape = len(self.points)
         self.use_normal = use_normal
 
+        self.points = data_dict['points']
+        if self.use_normal:
+            self.normals = data_dict['normals']
+        self.labels = data_dict['labels']
+        self.class_ids = data_dict['class_ids']
+        self.num_shape = len(self.points)
+
     def __getitem__(self, index):
+        points = self.points[index]
+        labels = self.labels[index]
         class_id = self.class_ids[index]
         if self.use_normal:
-            points, normals, labels = self.transform(self.points[index], self.normals[index], self.labels[index])
+            points, normals, labels = self.transform(points, self.normals[index], labels)
             return points, normals, labels, class_id
         else:
-            points, labels = self.transform(self.points[index], self.labels[index])
+            points, labels = self.transform(points, labels)
             return points, labels, class_id
 
     def __len__(self):

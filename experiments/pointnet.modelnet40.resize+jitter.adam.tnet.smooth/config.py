@@ -21,7 +21,7 @@ config.output_dir = osp.join(config.root_dir, 'output', config.program_name)
 config.snapshot_dir = osp.join(config.output_dir, 'snapshots')
 config.logs_dir = osp.join(config.output_dir, 'logs')
 config.events_dir = osp.join(config.output_dir, 'events')
-config.data_root = '/data/ModelNet40/modelnet40_ply_hdf5_2048'
+config.data_root = '/data/ModelNet40/modelnet40_normal_resampled_ply_hdf5_2048'
 
 ensure_dir(config.output_dir)
 ensure_dir(config.snapshot_dir)

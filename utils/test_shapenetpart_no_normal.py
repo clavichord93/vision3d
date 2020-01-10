@@ -25,7 +25,7 @@ def make_parser():
     return parser
 
 
-def test_epoch(engine, data_loader, model, epoch):
+def test_one_epoch(engine, data_loader, model, epoch):
     model.eval()
     accuracy_meter = AccuracyMeter(config.num_part)
     miou_meter = PartMeanIoUMeter(config.num_class, config.num_part, config.class_id_to_part_ids)
@@ -90,7 +90,7 @@ def main():
 
         if engine.snapshot is not None:
             engine.load_snapshot(engine.snapshot)
-            test_epoch(engine, data_loader, model, engine.state.epoch)
+            test_one_epoch(engine, data_loader, model, engine.state.epoch)
         else:
             best_accuracy = 0
             best_accuracy_epoch = -1
@@ -101,7 +101,7 @@ def main():
             for epoch in range(engine.args.start_epoch, engine.args.end_epoch + 1, engine.args.steps):
                 snapshot = osp.join(config.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
                 engine.load_snapshot(snapshot)
-                accuracy, instance_miou, class_miou = test_epoch(engine, data_loader, model, epoch)
+                accuracy, instance_miou, class_miou = test_one_epoch(engine, data_loader, model, epoch)
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     best_accuracy_epoch = epoch
