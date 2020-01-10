@@ -1,1 +1,0 @@
-../../utils/test_shapenetpart_no_normal.py

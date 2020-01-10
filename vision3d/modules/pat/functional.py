@@ -61,20 +61,16 @@ def create_pat_linear_blocks(input_dim, output_dims, groups, dropout=None):
     return layers
 
 
-def k_nearest_neighbors_graph(points, num_neighbor, dilation=None, training=True):
-    # ignore the nearest point (itself)
-    if dilation > 1:
-        num_neighbor_dilated = num_neighbor * dilation
-        _, index = k_nearest_neighbors(points, points, num_neighbor_dilated + 1)
-        if training:
-            device = points.device
-            sample_index = torch.randperm(num_neighbor_dilated)[:num_neighbor].to(device)
-            index = index[:, :, 1:].index_select(dim=2, index=sample_index).contiguous()
-        else:
-            index = index[:, :, 1:].contiguous()
-    else:
-        _, index = k_nearest_neighbors(points, points, num_neighbor + 1)
-        index = index[:, :, 1:].contiguous()
+def k_nearest_neighbors_graph(points, num_neighbor, dilation=1, training=True, ignore_nearest=True):
+    num_neighbor_dilated = num_neighbor * dilation + int(ignore_nearest)
+    _, index = k_nearest_neighbors(points, points, num_neighbor_dilated)
+    if ignore_nearest:
+        index = index[:, :, 1:]
+    if dilation > 1 and training:
+        device = points.device
+        sample_index = torch.randperm(num_neighbor_dilated)[:num_neighbor].to(device)
+        index = index.index_select(dim=2, index=sample_index)
+    index = index.contiguous()
     points = F.group_gather_by_index(points, index)
     return points
 

@@ -66,7 +66,11 @@ def main():
     parser = make_parser()
     log_file = osp.join(config.logs_dir, 'test-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
     with Engine(log_file=log_file, default_parser=parser, seed=config.seed) as engine:
+        start_time = time.time()
         data_loader = test_data_loader(config)
+        loading_time = time.time() - start_time
+        message = 'Data loader created: {:.3f}s collapsed.'.format(loading_time)
+        engine.logger.info(message)
 
         model = create_model(config.num_class).cuda()
         if engine.data_parallel:

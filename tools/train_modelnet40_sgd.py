@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from vision3d.utils.metrics import AccuracyMeter
+from vision3d.utils.metrics import AccuracyMeter, AverageMeter
 from vision3d.engine.engine import Engine
 from dataset import train_data_loader
 from config import config
@@ -24,6 +24,7 @@ def make_parser():
 def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler, epoch):
     model.train()
     accuracy_meter = AccuracyMeter(config.num_class)
+    loss_meter = AverageMeter()
     num_iter_per_epoch = len(data_loader)
     start_time = time.time()
 
@@ -45,6 +46,7 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
         preds = outputs.argmax(dim=1).detach().cpu().numpy()
         labels = labels.cpu().numpy()
         accuracy_meter.add_results(preds, labels)
+        loss_meter.add_results(loss_val)
 
         process_time = time.time() - start_time - prepare_time
 
@@ -61,7 +63,7 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
 
         start_time = time.time()
 
-    message = 'Epoch {}, acc: {:.3f}'.format(epoch, accuracy_meter.accuracy())
+    message = 'Epoch {}, acc: {:.3f}, loss: {:.3f}'.format(epoch, accuracy_meter.accuracy(), loss_meter.average())
     engine.logger.info(message)
 
     engine.register_state(epoch=epoch)
@@ -75,7 +77,11 @@ def main():
     parser = make_parser()
     log_file = osp.join(config.logs_dir, 'train-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
     with Engine(log_file=log_file, default_parser=parser, seed=config.seed) as engine:
+        start_time = time.time()
         data_loader = train_data_loader(config)
+        loading_time = time.time() - start_time
+        message = 'Data loader created: {:.3f}s collapsed.'.format(loading_time)
+        engine.logger.info(message)
 
         model = create_model(config.num_class).cuda()
         optimizer = optim.SGD(model.parameters(),

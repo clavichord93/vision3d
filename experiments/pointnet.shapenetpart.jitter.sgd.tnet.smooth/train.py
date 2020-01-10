@@ -7,9 +7,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from vision3d.utils.metrics import AccuracyMeter
+from vision3d.utils.metrics import AccuracyMeter, PartMeanIoUMeter, AverageMeter
 from vision3d.engine.engine import Engine
-from vision3d.utils.pytorch_utils import SmoothCrossEntropyLoss
+from vision3d.modules.pointnet import PointNetLoss
 from dataset import train_data_loader
 from config import config
 from model import create_model
@@ -17,27 +17,33 @@ from model import create_model
 
 def make_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--steps', metavar='N', type=int, default=10, help='iteration steps for logging')
+    parser.add_argument('--split', metavar='D', default='trainval', help='data split for training')
+    parser.add_argument('--steps', metavar='N', type=int, default=10, help='steps for logs')
     parser.add_argument('--tensorboardx', action='store_true', help='use tensorboardX')
     return parser
 
 
 def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler, epoch):
     model.train()
-    accuracy_meter = AccuracyMeter(config.num_class)
     num_iter_per_epoch = len(data_loader)
+    accuracy_meter = AccuracyMeter(config.num_part)
+    miou_meter = PartMeanIoUMeter(config.num_class, config.num_part, config.class_id_to_part_ids)
+    loss_meter = AverageMeter()
     start_time = time.time()
 
     for i, batch in enumerate(data_loader):
-        points, labels = batch
+        points, labels, class_ids = batch
         points = points.cuda()
         labels = labels.cuda()
+        class_ids = class_ids.cuda()
 
         prepare_time = time.time() - start_time
 
-        outputs = model(points)
-        loss = loss_func(outputs, labels)
+        outputs, transforms = model(points, class_ids)
+        loss, cls_loss, tnet_loss = loss_func(outputs, labels, transforms)
         loss_val = loss.item()
+        cls_loss_val = cls_loss.item()
+        tnet_loss_val = tnet_loss.item()
 
         optimizer.zero_grad()
         loss.backward()
@@ -45,7 +51,10 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
 
         preds = outputs.argmax(dim=1).detach().cpu().numpy()
         labels = labels.cpu().numpy()
+        class_ids = class_ids.cpu().numpy()
         accuracy_meter.add_results(preds, labels)
+        miou_meter.add_results(preds, labels, class_ids)
+        loss_meter.add_results(loss_val)
 
         process_time = time.time() - start_time - prepare_time
 
@@ -54,6 +63,8 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
             message = 'Epoch {}/{}, '.format(epoch + 1, config.max_epoch) + \
                       'iter {}/{}, '.format(i + 1, num_iter_per_epoch) + \
                       'loss: {:.3f}, '.format(loss_val) + \
+                      'cls_loss: {:.3f}, '.format(cls_loss_val) + \
+                      'tnet_loss: {:.3f}, '.format(tnet_loss_val) + \
                       'lr: {:.3e}, '.format(learning_rate) + \
                       'prep: {:.3f}s, proc: {:.3f}s'.format(prepare_time, process_time)
             engine.logger.info(message)
@@ -62,7 +73,11 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
 
         start_time = time.time()
 
-    message = 'Epoch {}, acc: {:.3f}'.format(epoch, accuracy_meter.accuracy())
+    message = 'Epoch {}, '.format(epoch) + \
+              'acc: {:.3f}, '.format(accuracy_meter.accuracy()) + \
+              'mIoU (instance): {:.3f}, '.format(miou_meter.instance_miou()) + \
+              'mIoU (category): {:.3f}'.format(miou_meter.class_miou()) + \
+              'loss: {:3f}'.format(loss_meter.average())
     engine.logger.info(message)
 
     engine.register_state(epoch=epoch)
@@ -76,14 +91,21 @@ def main():
     parser = make_parser()
     log_file = osp.join(config.logs_dir, 'train-{}.log'.format(time.strftime('%Y%m%d-%H%M%S')))
     with Engine(log_file=log_file, default_parser=parser, seed=config.seed) as engine:
-        data_loader = train_data_loader(config)
+        start_time = time.time()
+        data_loader = train_data_loader(config, engine.args.split)
+        loading_time = time.time() - start_time
+        message = 'Data loader created: {:.3f}s collapsed.'.format(loading_time)
+        engine.logger.info(message)
 
-        model = create_model(config.num_class).cuda()
-        optimizer = optim.SGD(model.parameters(),
+        model = create_model(config.num_class, config.num_part).cuda()
+        base_params = [parameter for name, parameter in model.named_parameters() if 'tnet' not in name]
+        tnet_params = [parameter for name, parameter in model.named_parameters() if 'tnet' in name]
+        optimizer = optim.SGD([{'params': base_params, 'lr': config.learning_rate},
+                               {'params': tnet_params, 'lr': config.learning_rate * 0.1}],
                               lr=config.learning_rate,
                               weight_decay=config.weight_decay,
                               momentum=config.momentum)
-        loss_func = SmoothCrossEntropyLoss().cuda()
+        loss_func = PointNetLoss(alpha=config.tnet_loss_alpha, eps=config.label_smoothing_eps).cuda()
         if engine.data_parallel:
             model = nn.DataParallel(model)
         engine.register_state(model=model, optimizer=optimizer)

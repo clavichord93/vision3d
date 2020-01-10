@@ -1,1 +1,1 @@
-../../utils/test_modelnet40.py
+../../tools/test_modelnet40.py

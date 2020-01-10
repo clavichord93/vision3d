@@ -23,14 +23,12 @@ class AbsoluteRelativePositionEmbedding(nn.Module):
                  output_dims1,
                  output_dims2,
                  num_neighbor,
-                 use_dilated_knn=False,
-                 base_dilation=2,
-                 base_num=1024):
+                 dilation=1,
+                 ignore_nearest=True):
         super(AbsoluteRelativePositionEmbedding, self).__init__()
         self.num_neighbor = num_neighbor
-        self.use_dilated_knn = use_dilated_knn
-        self.base_dilation = base_dilation
-        self.base_num = base_num
+        self.ignore_nearest = ignore_nearest
+        self.dilation = dilation
 
         layers = F.create_pat_conv2d_blocks(input_dim, output_dims1, groups=8)
         self.pointnet1 = nn.Sequential(OrderedDict(layers))
@@ -39,16 +37,12 @@ class AbsoluteRelativePositionEmbedding(nn.Module):
         layers = F.create_pat_conv1d_blocks(input_dim, output_dims2, groups=8)
         self.pointnet2 = nn.Sequential(OrderedDict(layers))
 
-    def dilation(self, num_point):
-        if self.use_dilated_knn:
-            return max(self.base_dilation * num_point // self.base_num, 1)
-        else:
-            return 1
-
     def forward(self, points):
-        num_point = points.shape[2]
-        dilation = self.dilation(num_point)
-        neighbors = F.k_nearest_neighbors_graph(points, self.num_neighbor, dilation=dilation, training=self.training)
+        neighbors = F.k_nearest_neighbors_graph(points,
+                                                self.num_neighbor,
+                                                dilation=self.dilation,
+                                                training=self.training,
+                                                ignore_nearest=self.ignore_nearest)
         num_neighbor = neighbors.shape[3]
         points = points.unsqueeze(3).repeat(1, 1, 1, num_neighbor)
         points = torch.cat([points, neighbors - points], dim=1)
@@ -58,29 +52,38 @@ class AbsoluteRelativePositionEmbedding(nn.Module):
         return points
 
 
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, dropout=None):
+        super(ScaledDotProductAttention, self).__init__()
+        self.has_dropout = dropout is not None
+        if self.has_dropout:
+            self.dp = nn.Dropout(dropout)
+
+    def forward(self, q, k, v):
+        num_channel = q.shape[-1]
+        attention = torch.matmul(q, k) / math.sqrt(num_channel)
+        attention = nn.functional.softmax(attention, dim=-2)
+        if self.has_dropout:
+            attention = self.dp(attention)
+        v = torch.matmul(v, attention)
+        return v
+
+
 class GroupShuffleAttention(nn.Module):
     def __init__(self, feature_dim, groups, dropout=None):
         super(GroupShuffleAttention, self).__init__()
         self.num_group = groups
-        self.has_dropout = dropout is not None
-        self.conv = nn.Conv1d(feature_dim, feature_dim, kernel_size=1, groups=groups)
+        self.transform = nn.Conv1d(feature_dim, feature_dim, kernel_size=1, groups=groups)
+        self.attention = ScaledDotProductAttention(dropout)
         self.gn = nn.GroupNorm(groups, feature_dim)
-        if self.has_dropout:
-            self.dp = nn.Dropout(dropout)
 
     def forward(self, points):
         identity = points
         batch_size, num_channel, num_point = points.shape
         num_channel_per_group = num_channel // self.num_group
-        points = self.conv(points)
+        points = self.transform(points)
         points = points.view(batch_size, self.num_group, num_channel_per_group, num_point)
-        queries = points.transpose(2, 3)
-        attention = torch.matmul(queries, points) / math.sqrt(num_channel_per_group)
-        attention = nn.functional.softmax(attention, dim=2)
-        if self.has_dropout:
-            attention = self.dp(attention)
-        points = nn.functional.elu(points)
-        points = torch.matmul(points, attention)
+        points = self.attention(points.transpose(2, 3), points, nn.functional.elu(points))
         points = points.transpose(1, 2).contiguous().view(batch_size, num_channel, num_point)
         points += identity
         points = self.gn(points)

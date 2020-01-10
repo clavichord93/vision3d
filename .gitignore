@@ -16,11 +16,11 @@ vision3d/modules/transformer
 # include project files
 !experiments/pointnet.modelnet40.resize+jitter.sgd.smooth
 !experiments/pointnet.modelnet40.resize+jitter.adam.tnet.smooth
-!experiments/pointnet.shapenetpart.jitter.sgd.tnet.one_hot.smooth
+!experiments/pointnet.shapenetpart.jitter.sgd.tnet.smooth
 !experiments/pointnet2.modelnet40.resize+jitter.sgd.ssg.smooth
 !experiments/pointnet2.modelnet40.resize+jitter.sgd.msg.smooth
-!experiments/pointnet2.shapenetpart.jitter.sgd.ssg.one_hot.smooth
-!experiments/pointnet2.shapenetpart.jitter.sgd.msg.one_hot.smooth
+!experiments/pointnet2.shapenetpart.jitter.sgd.ssg.smooth
+!experiments/pointnet2.shapenetpart.jitter.sgd.msg.smooth
 !experiments/dgcnn.modelnet40.resize+jitter.sgd.max+avg.lrelu.smooth
-!experiments/dgcnn.shapenetpart.jitter.sgd.max+avg.lrelu.one_hot.smooth
+!experiments/dgcnn.shapenetpart.jitter.sgd.max+avg.lrelu.smooth
 
