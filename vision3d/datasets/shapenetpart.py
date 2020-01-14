@@ -124,10 +124,10 @@ def preprocess(root):
         max_num_point = 0
         min_num_point = sys.maxsize
         with open(data_split_file) as f:
-            all_points = []
-            all_normals = []
-            all_labels = []
-            all_class_ids = []
+            points_list = []
+            normals_list = []
+            labels_list = []
+            class_ids = []
             shapenet_paths = json.load(f)
             pbar = tqdm(shapenet_paths)
             for shapenet_path in pbar:
@@ -139,25 +139,25 @@ def preprocess(root):
 
                     points = [[float(x) for x in split_line[:3]] for split_line in split_lines]
                     points = np.array(points, dtype=np.float)
-                    all_points.append(points)
+                    points_list.append(points)
 
                     normals = [[float(x) for x in split_line[3:-1]] for split_line in split_lines]
-                    all_normals.append(np.array(normals, dtype=np.float))
+                    normals_list.append(np.array(normals, dtype=np.float))
 
                     labels = [int(split_line[-1].split('.')[0]) for split_line in split_lines]
-                    all_labels.append(np.array(labels, dtype=np.int))
+                    labels_list.append(np.array(labels, dtype=np.int))
 
                     class_id = _get_class_id(synset)
-                    all_class_ids.append(class_id)
+                    class_ids.append(class_id)
                 num_point = len(points)
                 max_num_point = max(max_num_point, num_point)
                 min_num_point = min(min_num_point, num_point)
                 message = 'num_point: {}'.format(num_point)
                 pbar.set_description(message)
-            data_dict[split] = {'points': all_points,
-                                'normals': all_normals,
-                                'labels': all_labels,
-                                'class_ids': all_class_ids}
+            data_dict[split] = {'points': points_list,
+                                'normals': normals_list,
+                                'labels': labels_list,
+                                'class_ids': class_ids}
         print('"{}" finished (max_num_point={}, min_num_point={})'.format(split, max_num_point, min_num_point))
     data_dict['trainval'] = {'points': data_dict['train']['points'] + data_dict['val']['points'],
                              'normals': data_dict['train']['normals'] + data_dict['val']['normals'],
@@ -184,26 +184,26 @@ class ShapeNetPartDataset(_ShapeNetPartDatasetBase):
         self.transform = transform
         self.use_normal = use_normal
 
-        self.points = data_dict['points']
+        self.points_list = data_dict['points']
         if self.use_normal:
-            self.normals = data_dict['normals']
-        self.labels = data_dict['labels']
+            self.normals_list = data_dict['normals']
+        self.labels_list = data_dict['labels']
         self.class_ids = data_dict['class_ids']
-        self.num_shape = len(self.points)
+        self.length = len(self.points_list)
 
     def __getitem__(self, index):
-        points = self.points[index]
-        labels = self.labels[index]
+        points = self.points_list[index]
+        labels = self.labels_list[index]
         class_id = self.class_ids[index]
         if self.use_normal:
-            points, normals, labels = self.transform(points, self.normals[index], labels)
+            points, normals, labels = self.transform(points, self.normals_list[index], labels)
             return points, normals, labels, class_id
         else:
             points, labels = self.transform(points, labels)
             return points, labels, class_id
 
     def __len__(self):
-        return self.num_shape
+        return self.length
 
 
 if __name__ == '__main__':
@@ -212,7 +212,7 @@ if __name__ == '__main__':
 
     dataset = ShapeNetPartDataset(root, 'trainval', None)
     max_num_point = 0
-    for points in dataset.points:
+    for points in dataset.points_list:
         num_point = points.shape[0]
         max_num_point = max(max_num_point, num_point)
     print(max_num_point)

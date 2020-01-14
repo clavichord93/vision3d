@@ -22,31 +22,31 @@ __all__ = [
 
 class GatherByIndexFunction(Function):
     r"""
-    Gather by index.
+    Gather by indices.
     Gather `num_sample` points from a set of `num_point` points.
 
     :param points: torch.Tensor (batch_size, num_channel, num_point)
         The features/coordinates of all points.
-    :param index: torch.Tensor (batch_size, num_sample)
+    :param indices: torch.Tensor (batch_size, num_sample)
         The indices of the points to gather.
 
     :return output: torch.Tensor (batch, num_channel, num_sample)
         The features/coordinates of the gathered points.
     """
     @staticmethod
-    def forward(ctx, points, index):
+    def forward(ctx, points, indices):
         batch_size, num_channel, num_point = points.shape
-        ctx.save_for_backward(index)
+        ctx.save_for_backward(indices)
         ctx.num_point = num_point
-        output = ext.gather_by_index(points, index)
+        output = ext.gather_by_index(points, indices)
         return output
 
     @staticmethod
     def backward(ctx, grad_output):
-        index = ctx.saved_tensors[0]
+        indices = ctx.saved_tensors[0]
         num_point = ctx.num_point
         grad_output = grad_output.contiguous()
-        grad_points = ext.gather_by_index_grad(grad_output, index, num_point)
+        grad_points = ext.gather_by_index_grad(grad_output, indices, num_point)
         return grad_points, None
 
 
@@ -55,31 +55,31 @@ gather_by_index = GatherByIndexFunction.apply
 
 class GroupGatherByIndexFunction(Function):
     r"""
-    Group gather by index.
+    Group gather by indices.
     Gather `num_sample` points for each of the `num_centroid` centroids from a set of `num_point` points.
 
     :param points: torch.Tensor (batch_size, num_channel, num_point)
         The features/coordinates of all points.
-    :param index: torch.Tensor (batch_size, num_centroid, num_sample)
+    :param indices: torch.Tensor (batch_size, num_centroid, num_sample)
         The indices of the points to gather.
 
     :return output: torch.Tensor (batch, num_channel, num_centroid, num_sample)
         The features/coordinates of the gathered points.
     """
     @staticmethod
-    def forward(ctx, points, index):
+    def forward(ctx, points, indices):
         batch_size, num_channel, num_point = points.shape
-        ctx.save_for_backward(index)
+        ctx.save_for_backward(indices)
         ctx.num_point = num_point
-        output = ext.group_gather_by_index(points, index)
+        output = ext.group_gather_by_index(points, indices)
         return output
 
     @staticmethod
     def backward(ctx, grad_output):
-        index = ctx.saved_tensors[0]
+        indices = ctx.saved_tensors[0]
         num_point = ctx.num_point
         grad_output = grad_output.contiguous()
-        grad_points = ext.group_gather_by_index_grad(grad_output, index, num_point)
+        grad_points = ext.group_gather_by_index_grad(grad_output, indices, num_point)
         return grad_points, None
 
 
@@ -94,11 +94,11 @@ def farthest_point_sampling(points, num_sample):
         The coordinates of the points.
     :param num_sample: int
         The number of centroids sampled.
-    :return index: torch.Tensor (batch_size, num_sample)
+    :return indices: torch.Tensor (batch_size, num_sample)
         The indices of the sampled centroids.
     """
-    index = ext.farthest_point_sampling(points, num_sample)
-    return index
+    indices = ext.farthest_point_sampling(points, num_sample)
+    return indices
 
 
 def farthest_point_sampling_and_gather(points, num_sample):
@@ -112,8 +112,8 @@ def farthest_point_sampling_and_gather(points, num_sample):
     :return centroids: torch.Tensor (batch_size, 3, num_sample)
         The indices of the sampled centroids.
     """
-    index = ext.farthest_point_sampling(points, num_sample)
-    centroids = gather_by_index(points, index)
+    indices = ext.farthest_point_sampling(points, num_sample)
+    centroids = gather_by_index(points, indices)
     return centroids
 
 
@@ -131,11 +131,11 @@ def ball_query(points, centroids, num_sample, radius):
     :param radius: float
         The radius of the balls.
 
-    :return index: torch.Tensor (batch_size, num_centroid, num_sample)
+    :return indices: torch.Tensor (batch_size, num_centroid, num_sample)
         The indices of the sampled points.
     """
-    index = ext.ball_query_v1(centroids, points, radius, num_sample)
-    return index
+    indices = ext.ball_query_v1(centroids, points, radius, num_sample)
+    return indices
 
 
 def random_ball_query(points, centroids, num_sample, radius):
@@ -152,19 +152,19 @@ def random_ball_query(points, centroids, num_sample, radius):
     :param radius: float
         The radius of the balls.
 
-    :return index: torch.Tensor (batch_size, num_centroid, num_sample)
+    :return indices: torch.Tensor (batch_size, num_centroid, num_sample)
         The indices of the sampled points.
     """
     seed = random.randint()
-    index = ext.ball_query_v2(seed, centroids, points, radius, num_sample)
-    return index
+    indices = ext.ball_query_v2(seed, centroids, points, radius, num_sample)
+    return indices
 
 
-def _group_gather_and_concat(points, features, centroids, index):
-    points = group_gather_by_index(points, index)
+def _group_gather_and_concat(points, features, centroids, indices):
+    points = group_gather_by_index(points, indices)
     aligned_points = points - centroids.unsqueeze(3)
     if features is not None:
-        features = group_gather_by_index(features, index)
+        features = group_gather_by_index(features, indices)
         features = torch.cat([features, aligned_points], dim=1)
     else:
         features = aligned_points
@@ -191,8 +191,8 @@ def ball_query_and_group_gather(points, features, centroids, num_sample, radius)
     :return features: torch.Tensor (batch_size, num_channel, num_centroid, num_sample)
         The features of the sampled points.
     """
-    index = ext.ball_query_v1(centroids, points, radius, num_sample)
-    points, features = _group_gather_and_concat(points, features, centroids, index)
+    indices = ext.ball_query_v1(centroids, points, radius, num_sample)
+    points, features = _group_gather_and_concat(points, features, centroids, indices)
     return points, features
 
 
@@ -217,8 +217,8 @@ def random_ball_query_and_group_gather(points, features, centroids, num_sample, 
         The features of the sampled points.
     """
     seed = random.randint(0, 2147483647)
-    index = ext.ball_query_v2(seed, centroids, points, radius, num_sample)
-    points, features = _group_gather_and_concat(points, features, centroids, index)
+    indices = ext.ball_query_v2(seed, centroids, points, radius, num_sample)
+    points, features = _group_gather_and_concat(points, features, centroids, indices)
     return points, features
 
 
@@ -232,11 +232,11 @@ def three_nearest_neighbors(points1, points2):
         The sub-sampled points set.
     :return dist2: torch.Tensor (batch_size, num_point1, 3)
         The corresponding squared distance of the found neighbors to the point.
-    :return index: torch.Tensor (batch_size, num_point1, 3)
+    :return indices: torch.Tensor (batch_size, num_point1, 3)
         The indices of the found neighbors.
     """
-    dist2, index = ext.three_nearest_neighbors(points1, points2)
-    return dist2, index
+    dist2, indices = ext.three_nearest_neighbors(points1, points2)
+    return dist2, indices
 
 
 class ThreeInterpolateFunction(Function):
@@ -246,7 +246,7 @@ class ThreeInterpolateFunction(Function):
 
     :param features: torch.Tensor (batch_size, num_channel, num_point2)
         The features of the sub-sampled points.
-    :param index: torch.Tensor (batch, num_point1, 3)
+    :param indices: torch.Tensor (batch, num_point1, 3)
         The indices of the sub-sampled points to interpolate each non-sampled points.
     :param weight: torch.Tensor (batch, num_point1, 3)
         The weights of the sub-sampled points to interpolate each non-sampled points.
@@ -254,19 +254,19 @@ class ThreeInterpolateFunction(Function):
         The interpolated features of the non-sampled points.
     """
     @staticmethod
-    def forward(ctx, features, index, weights):
+    def forward(ctx, features, indices, weights):
         batch_size, num_channel, num_point2 = features.shape
-        ctx.save_for_backward(index, weights)
+        ctx.save_for_backward(indices, weights)
         ctx.num_point2 = num_point2
-        outputs = ext.three_interpolate(features, index, weights)
+        outputs = ext.three_interpolate(features, indices, weights)
         return outputs
 
     @staticmethod
     def backward(ctx, grad_outputs):
-        index, weights = ctx.saved_tensors
+        indices, weights = ctx.saved_tensors
         num_point2 = ctx.num_point2
         grad_outputs = grad_outputs.contiguous()
-        grad_features = ext.three_interpolate_grad(grad_outputs, index, weights, num_point2)
+        grad_features = ext.three_interpolate_grad(grad_outputs, indices, weights, num_point2)
         return grad_features, None, None
 
 

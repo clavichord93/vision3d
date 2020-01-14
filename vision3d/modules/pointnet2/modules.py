@@ -8,12 +8,12 @@ from ...utils.pytorch_utils import create_conv1d_blocks, create_conv2d_blocks
 
 
 class SetAbstractionModule(nn.Module):
-    def __init__(self, in_channels, out_channels_list, num_centroid, num_sample, radius):
+    def __init__(self, input_dim, output_dims, num_centroid, num_sample, radius):
         super(SetAbstractionModule, self).__init__()
         self.num_centroid = num_centroid
         self.num_sample = num_sample
         self.radius = radius
-        layers = create_conv2d_blocks(in_channels, out_channels_list, kernel_size=1)
+        layers = create_conv2d_blocks(input_dim, output_dims, kernel_size=1)
         self.pointnet = nn.Sequential(OrderedDict(layers))
 
     def forward(self, points, features):
@@ -93,10 +93,10 @@ class FeaturePropagationModule(nn.Module):
         if num_point2 == 1:
             features2 = features2.repeat(1, 1, num_point1)
         else:
-            dist2, index = F.three_nearest_neighbors(points1, points2)
+            dist2, indices = F.three_nearest_neighbors(points1, points2)
             weights = torch.div(1., dist2 + 1e-5)
             weights = weights / torch.sum(weights, dim=2, keepdim=True)
-            features2 = F.three_interpolate(features2, index, weights)
+            features2 = F.three_interpolate(features2, indices, weights)
         if features1 is not None:
             features1 = torch.cat([features1, features2], dim=1)
         else:

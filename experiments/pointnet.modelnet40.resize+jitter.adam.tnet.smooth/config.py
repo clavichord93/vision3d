@@ -5,7 +5,7 @@ import argparse
 from easydict import EasyDict as edict
 
 from vision3d.utils.python_utils import ensure_dir
-from vision3d.datasets.modelnet40 import ModelNet40Dataset as dataset
+from vision3d.datasets import ModelNet40Dataset as dataset
 
 config = edict()
 
@@ -54,7 +54,7 @@ config.gamma = 0.5
 
 # model
 config.tnet_loss_alpha = 0.001
-config.label_smoothing_eps = 0.2
+config.label_smoothing_eps = 0.1
 
 
 def parse_args():

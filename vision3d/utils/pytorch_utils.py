@@ -239,12 +239,12 @@ def k_nearest_neighbors(points, centroids, num_neighbor):
         The number of nearest neighbors to compute.
     :return dist2: torch.Tensor(batch_size, num_points1, k)
         The squared distance of the kNNs of the centroids.
-    :return index: torch.Tensor(batch_size, num_points1, k)
+    :return indices: torch.Tensor(batch_size, num_points1, k)
         The indices of the kNNs of the centroids.
     """
     a2 = torch.sum(centroids ** 2, dim=1).unsqueeze(2)
     ab = torch.matmul(centroids.transpose(1, 2), points)
     b2 = torch.sum(points ** 2, dim=1).unsqueeze(1)
     pairwise_dist2 = a2 - 2 * ab + b2
-    dist2, index = pairwise_dist2.topk(num_neighbor, dim=2, largest=False)
-    return dist2, index
+    dist2, indices = pairwise_dist2.topk(num_neighbor, dim=2, largest=False)
+    return dist2, indices

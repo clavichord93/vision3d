@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 
 from vision3d.utils.metrics import AccuracyMeter, PartMeanIoUMeter
-from vision3d.engine.engine import Engine
+from vision3d.engine import Engine
 from dataset import test_data_loader
 from config import config
 from model import create_model
@@ -28,7 +28,7 @@ def make_parser():
 def test_one_epoch(engine, data_loader, model, epoch):
     model.eval()
     accuracy_meter = AccuracyMeter(config.num_part)
-    miou_meter = PartMeanIoUMeter(config.num_class, config.num_part, config.class_id_to_part_ids)
+    mean_iou_meter = PartMeanIoUMeter(config.num_class, config.num_part, config.class_id_to_part_ids)
     pbar = tqdm(enumerate(data_loader), total=len(data_loader))
     start_time = time.time()
 
@@ -45,36 +45,35 @@ def test_one_epoch(engine, data_loader, model, epoch):
             labels = labels.cpu().numpy()
             class_ids = class_ids.cpu().numpy()
             accuracy_meter.add_results(preds, labels)
-            miou_meter.add_results(preds, labels, class_ids)
+            mean_iou_meter.add_results(preds, labels, class_ids)
 
         process_time = time.time() - start_time - prepare_time
 
-        message = 'Epoch {}, '.format(epoch) + \
-                  'data: {:.3f}s, proc: {:.3f}s'.format(prepare_time, process_time)
+        message = 'Epoch {}, data: {:.3f}s, proc: {:.3f}s'.format(epoch, prepare_time, process_time)
         pbar.set_description(message)
 
         start_time = time.time()
 
-    accuracy = accuracy_meter.accuracy()
-    instance_miou = miou_meter.instance_miou()
-    class_miou = miou_meter.class_miou()
+    accuracy = accuracy_meter.overall_accuracy()
+    mean_iou_over_instance = mean_iou_meter.mean_iou_over_instance()
+    mean_iou_over_class = mean_iou_meter.mean_iou_over_class()
 
     message = 'Epoch {}, '.format(epoch) + \
               'acc: {:.3f}, '.format(accuracy) + \
-              'mIoU (instance): {:.3f}, '.format(instance_miou) + \
-              'mIoU (category): {:.3f}'.format(class_miou)
+              'mIoU (instance): {:.3f}, '.format(mean_iou_over_instance) + \
+              'mIoU (category): {:.3f}'.format(mean_iou_over_class)
     engine.logger.info(message)
     if engine.args.verbose:
         for i in range(config.num_part):
             part_name = config.part_names[i]
-            accuracy = accuracy_meter.accuracy_per_class(i)
-            engine.logger.info('  {}, acc: {:.3f}'.format(part_name, accuracy))
+            accuracy_per_class = accuracy_meter.accuracy_per_class(i)
+            engine.logger.info('  {}, acc: {:.3f}'.format(part_name, accuracy_per_class))
         for i in range(config.num_class):
             class_name = config.class_names[i]
-            mean_iou = miou_meter.instance_miou_per_class(i)
-            engine.logger.info('  {}, mIoU: {:.3f}'.format(class_name, mean_iou))
+            mean_iou_per_class = mean_iou_meter.mean_iou_per_class(i)
+            engine.logger.info('  {}, mIoU: {:.3f}'.format(class_name, mean_iou_per_class))
 
-    return accuracy, instance_miou, class_miou
+    return accuracy, mean_iou_over_instance, mean_iou_over_class
 
 
 def main():
@@ -98,28 +97,31 @@ def main():
         else:
             best_accuracy = 0
             best_accuracy_epoch = -1
-            best_instance_miou = 0
-            best_instance_miou_epoch = -1
-            best_class_miou = 0
-            best_class_miou_epoch = -1
+            best_mean_iou_over_instance = 0
+            best_mean_iou_over_instance_epoch = -1
+            best_mean_iou_over_class = 0
+            best_mean_iou_over_class_epoch = -1
             for epoch in range(engine.args.start_epoch, engine.args.end_epoch + 1, engine.args.steps):
                 snapshot = osp.join(config.snapshot_dir, 'epoch-{}.pth.tar'.format(epoch))
                 engine.load_snapshot(snapshot)
-                accuracy, instance_miou, class_miou = test_one_epoch(engine, data_loader, model, epoch)
+                accuracy, mean_iou_over_instance, mean_iou_over_class = \
+                    test_one_epoch(engine, data_loader, model, epoch)
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     best_accuracy_epoch = epoch
-                if instance_miou > best_instance_miou:
-                    best_instance_miou = instance_miou
-                    best_instance_miou_epoch = epoch
-                if class_miou > best_class_miou:
-                    best_class_miou = class_miou
-                    best_class_miou_epoch = epoch
+                if mean_iou_over_instance > best_mean_iou_over_instance:
+                    best_mean_iou_over_instance = mean_iou_over_instance
+                    best_mean_iou_over_instance_epoch = epoch
+                if mean_iou_over_class > best_mean_iou_over_class:
+                    best_mean_iou_over_class = mean_iou_over_class
+                    best_mean_iou_over_class_epoch = epoch
             message = 'Best acc: {:.3f}, best epoch: {}'.format(best_accuracy, best_accuracy_epoch)
             engine.logger.info(message)
-            message = 'Best instance mIoU: {:.3f}, best epoch: {}'.format(best_instance_miou, best_instance_miou_epoch)
+            message = 'Best instance mIoU: {:.3f}, '.format(best_mean_iou_over_instance) + \
+                      'best epoch: {}'.format(best_mean_iou_over_instance_epoch)
             engine.logger.info(message)
-            message = 'Best category mIoU: {:.3f}, best epoch: {}'.format(best_class_miou, best_class_miou_epoch)
+            message = 'Best category mIoU: {:.3f}, '.format(best_mean_iou_over_class) + \
+                      'best epoch: {}'.format(best_mean_iou_over_class_epoch)
             engine.logger.info(message)
 
 

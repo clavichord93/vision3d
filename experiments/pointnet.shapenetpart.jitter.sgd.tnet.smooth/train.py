@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from vision3d.utils.metrics import AccuracyMeter, PartMeanIoUMeter, AverageMeter
-from vision3d.engine.engine import Engine
+from vision3d.engine import Engine
 from vision3d.modules.pointnet import PointNetLoss
 from dataset import train_data_loader
 from config import config
@@ -18,7 +18,7 @@ from model import create_model
 def make_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--split', metavar='D', default='trainval', help='data split for training')
-    parser.add_argument('--steps', metavar='N', type=int, default=10, help='steps for logs')
+    parser.add_argument('--steps', metavar='N', type=int, default=10, help='iteration steps for logging')
     parser.add_argument('--tensorboardx', action='store_true', help='use tensorboardX')
     return parser
 
@@ -27,7 +27,7 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
     model.train()
     num_iter_per_epoch = len(data_loader)
     accuracy_meter = AccuracyMeter(config.num_part)
-    miou_meter = PartMeanIoUMeter(config.num_class, config.num_part, config.class_id_to_part_ids)
+    mean_iou_meter = PartMeanIoUMeter(config.num_class, config.num_part, config.class_id_to_part_ids)
     loss_meter = AverageMeter()
     start_time = time.time()
 
@@ -53,7 +53,7 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
         labels = labels.cpu().numpy()
         class_ids = class_ids.cpu().numpy()
         accuracy_meter.add_results(preds, labels)
-        miou_meter.add_results(preds, labels, class_ids)
+        mean_iou_meter.add_results(preds, labels, class_ids)
         loss_meter.add_results(loss_val)
 
         process_time = time.time() - start_time - prepare_time
@@ -74,10 +74,10 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
         start_time = time.time()
 
     message = 'Epoch {}, '.format(epoch) + \
-              'acc: {:.3f}, '.format(accuracy_meter.accuracy()) + \
-              'mIoU (instance): {:.3f}, '.format(miou_meter.instance_miou()) + \
-              'mIoU (category): {:.3f}'.format(miou_meter.class_miou()) + \
-              'loss: {:3f}'.format(loss_meter.average())
+              'acc: {:.3f}, '.format(accuracy_meter.overall_accuracy()) + \
+              'mIoU (instance): {:.3f}, '.format(mean_iou_meter.mean_iou_over_instance()) + \
+              'mIoU (category): {:.3f}'.format(mean_iou_meter.mean_iou_over_class()) + \
+              'loss: {:.3f}'.format(loss_meter.average())
     engine.logger.info(message)
 
     engine.register_state(epoch=epoch)

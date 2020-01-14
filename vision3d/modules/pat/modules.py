@@ -97,7 +97,7 @@ class GumbelSubsetSampling(nn.Module):
 
     Use soft sampling in training and hard sampling in testing.
     """
-    def __init__(self, input_dim, num_sample, tau):
+    def __init__(self, input_dim, num_sample, tau=1.0):
         super(GumbelSubsetSampling, self).__init__()
         self.num_sample = num_sample
         self.tau = tau

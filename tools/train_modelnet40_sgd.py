@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from vision3d.utils.metrics import AccuracyMeter, AverageMeter
-from vision3d.engine.engine import Engine
+from vision3d.engine import Engine
 from dataset import train_data_loader
 from config import config
 from model import create_model
@@ -63,7 +63,9 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
 
         start_time = time.time()
 
-    message = 'Epoch {}, acc: {:.3f}, loss: {:.3f}'.format(epoch, accuracy_meter.accuracy(), loss_meter.average())
+    message = 'Epoch {}, '.format(epoch) + \
+              'acc: {:.3f}, '.format(accuracy_meter.overall_accuracy()) + \
+              'loss: {:.3f}'.format(loss_meter.average())
     engine.logger.info(message)
 
     engine.register_state(epoch=epoch)

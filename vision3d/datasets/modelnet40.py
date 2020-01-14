@@ -62,26 +62,26 @@ class ModelNet40Dataset(_ModelNet40DatasetBase):
         if split not in ['train', 'test']:
             raise ValueError('Invalid split "{}"!'.format(split))
         data_files = glob.glob(osp.join(root, 'ply_data_normal_resampled_{}*.h5'.format(split)))
-        all_points = []
-        all_labels = []
+        points_list = []
+        labels = []
         for data_file in data_files:
             h5file = h5py.File(data_file, 'r')
-            points = h5file['data'][:]
-            labels = h5file['label'][:]
-            all_points.append(points)
-            all_labels.append(labels)
-        self.points = np.concatenate(all_points)
-        self.labels = np.concatenate(all_labels)
-        self.num_shape = self.points.shape[0]
+            data = h5file['data'][:]
+            label = h5file['label'][:]
+            points_list.append(data)
+            labels.append(label)
+        self.points_list = np.concatenate(points_list)
+        self.labels = np.concatenate(labels)
+        self.length = self.points_list.shape[0]
         self.transform = transform
 
     def __getitem__(self, index):
-        points = self.transform(self.points[index, :, :3])
+        points = self.transform(self.points_list[index, :, :3])
         label = int(self.labels[index])
         return points, label
 
     def __len__(self):
-        return self.num_shape
+        return self.length
 
 
 if __name__ == '__main__':

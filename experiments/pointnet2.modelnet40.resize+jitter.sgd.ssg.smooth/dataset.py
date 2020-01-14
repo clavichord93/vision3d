@@ -1,6 +1,6 @@
 import torch.utils.data
 
-from vision3d.datasets.modelnet40 import ModelNet40Dataset
+from vision3d.datasets import ModelNet40Dataset
 import vision3d.transforms.functional as F
 from vision3d.utils.pytorch_utils import reset_numpy_random_seed
 

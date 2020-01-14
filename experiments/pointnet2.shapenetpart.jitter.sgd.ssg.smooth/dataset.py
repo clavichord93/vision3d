@@ -2,7 +2,7 @@ import torch.utils.data
 import numpy as np
 from tqdm import tqdm
 
-from vision3d.datasets.shapenetpart import ShapeNetPartDataset
+from vision3d.datasets import ShapeNetPartDataset
 import vision3d.transforms.functional as F
 from vision3d.utils.pytorch_utils import reset_numpy_random_seed
 
@@ -15,10 +15,10 @@ class TrainTransform(object):
     def __call__(self, points, normals, labels):
         num_point = points.shape[0]
         # random sampling
-        index = np.random.choice(num_point, self.num_point, replace=True)
-        points = points[index]
-        normals = normals[index]
-        labels = labels[index]
+        indices = np.random.choice(num_point, self.num_point, replace=True)
+        points = points[indices]
+        normals = normals[indices]
+        labels = labels[indices]
         # normalize
         points = F.normalize_point_cloud(points)
         # random jitter

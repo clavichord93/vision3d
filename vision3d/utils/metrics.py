@@ -42,10 +42,10 @@ class AccuracyMeter(object):
             self.num_correct_per_class[i] += np.sum(results_per_class)
             self.num_record_per_class[i] += results_per_class.size
 
-    def accuracy(self):
+    def overall_accuracy(self):
         return _safe_divide(self.num_correct, self.num_record)
 
-    def mean_accuracy(self):
+    def mean_accuracy_over_class(self):
         return np.mean([self.accuracy_per_class(i) for i in range(self.num_class)])
 
     def accuracy_per_class(self, class_id):
@@ -85,14 +85,14 @@ class PartMeanIoUMeter(object):
         self.ious.append(iou)
         self.ious_per_class[class_id].append(iou)
 
-    def instance_miou(self):
+    def mean_iou_over_instance(self):
         return np.mean(self.ious)
 
-    def class_miou(self):
-        mean_iou_per_class = [self.instance_miou_per_class(i) for i in range(self.num_class)]
+    def mean_iou_over_class(self):
+        mean_iou_per_class = [self.mean_iou_per_class(i) for i in range(self.num_class)]
         return np.mean(mean_iou_per_class)
 
-    def instance_miou_per_class(self, class_id):
+    def mean_iou_per_class(self, class_id):
         return np.mean(self.ious_per_class[class_id])
 
 
@@ -111,8 +111,8 @@ class MeanIoUMeter(object):
             self.intersect_per_class[class_id] += intersect
             self.union_per_class[class_id] += union
 
-    def class_miou(self):
-        return np.mean([self.class_miou_per_class(i) for i in range(self.num_class)])
+    def mean_iou(self):
+        return np.mean([self.mean_iou_per_class(i) for i in range(self.num_class)])
 
-    def class_miou_per_class(self, class_id):
+    def mean_iou_per_class(self, class_id):
         return _safe_divide(self.intersect_per_class[class_id], self.union_per_class[class_id])

@@ -5,7 +5,7 @@ import argparse
 from easydict import EasyDict as edict
 
 from vision3d.utils.python_utils import ensure_dir
-from vision3d.datasets.shapenetpart import ShapeNetPartDataset as dataset
+from vision3d.datasets import ShapeNetPartDataset as dataset
 
 config = edict()
 
@@ -54,7 +54,7 @@ config.weight_decay = 1e-4
 config.max_epoch = 250
 
 # model
-config.label_smoothing_eps = 0.2
+config.label_smoothing_eps = 0.1
 
 
 def parse_args():

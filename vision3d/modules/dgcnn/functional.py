@@ -23,8 +23,8 @@ def dynamic_graph_update(points, centroids, num_neighbor):
     :return neighbors: torch.Tensor (batch_size, 2 * num_channel, num_centroid, num_neighbor)
         The concatenated features/coordinates of the kNNs for the centroids.
     """
-    _, index = k_nearest_neighbors(points, centroids, num_neighbor)
-    neighbors = F.group_gather_by_index(points, index)
+    _, indices = k_nearest_neighbors(points, centroids, num_neighbor)
+    neighbors = F.group_gather_by_index(points, indices)
     points = points.unsqueeze(3).repeat(1, 1, 1, num_neighbor)
     differences = neighbors - points
     features = torch.cat([points, differences], dim=1)
