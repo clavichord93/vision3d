@@ -216,23 +216,23 @@ class S3DISWholeSceneDataset(_S3DISDatasetBase):
         while block_index < num_block:
             if points_list[block_index].shape[0] > self.num_sample / 2:
                 block_index += 1
-            else:
-                points = points_list.pop(block_index)
-                features = features_list.pop(block_index)
-                labels = labels_list.pop(block_index)
-                point_indices = point_indices_list.pop(block_index)
-                barycenter = barycenters.pop(block_index)
-                nearest_block_index = self._find_nearest_block(points, barycenter, points_list, barycenters)
-                merged_points = np.concatenate([points_list[nearest_block_index], points], axis=0)
-                merged_features = np.concatenate([features_list[nearest_block_index], features], axis=0)
-                merged_labels = np.concatenate([labels_list[nearest_block_index], labels], axis=0)
-                merged_point_indices = np.concatenate([point_indices_list[nearest_block_index], point_indices], axis=0)
-                points_list[nearest_block_index] = merged_points
-                features_list[nearest_block_index] = merged_features
-                labels_list[nearest_block_index] = merged_labels
-                point_indices_list[nearest_block_index] = merged_point_indices
-                barycenters[nearest_block_index] = np.mean(merged_points[:, :2], axis=0)
-                num_block -= 1
+                continue
+            points = points_list.pop(block_index)
+            features = features_list.pop(block_index)
+            labels = labels_list.pop(block_index)
+            point_indices = point_indices_list.pop(block_index)
+            barycenter = barycenters.pop(block_index)
+            nearest_block_index = self._find_nearest_block(points, barycenter, points_list, barycenters)
+            merged_points = np.concatenate([points_list[nearest_block_index], points], axis=0)
+            merged_features = np.concatenate([features_list[nearest_block_index], features], axis=0)
+            merged_labels = np.concatenate([labels_list[nearest_block_index], labels], axis=0)
+            merged_point_indices = np.concatenate([point_indices_list[nearest_block_index], point_indices], axis=0)
+            points_list[nearest_block_index] = merged_points
+            features_list[nearest_block_index] = merged_features
+            labels_list[nearest_block_index] = merged_labels
+            point_indices_list[nearest_block_index] = merged_point_indices
+            barycenters[nearest_block_index] = np.mean(merged_points[:, :2], axis=0)
+            num_block -= 1
 
         # divide large blocks
         num_block = len(points_list)
