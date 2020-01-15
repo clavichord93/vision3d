@@ -82,16 +82,16 @@ def test_data_loader(config, split):
 if __name__ == '__main__':
     from config import config
 
-    train_data_loader = train_data_loader(config, 'train')
+    data_loader = train_data_loader(config, 'train')
     statistics = np.zeros(config.num_class, dtype=np.int)
-    for i, (x, y) in enumerate(train_data_loader):
+    for i, (x, y) in enumerate(data_loader):
         for j in range(config.num_class):
             statistics[j] += np.count_nonzero(y.numpy() == j)
     print(statistics)
 
-    test_data_loader = test_data_loader(config, 'test')
+    data_loader = test_data_loader(config, 'test')
     statistics = np.zeros(config.num_part, dtype=np.int)
-    pbar = tqdm(test_data_loader)
+    pbar = tqdm(data_loader)
     for points, normals, labels, class_ids in pbar:
         for j in range(config.num_part):
             statistics[j] += np.count_nonzero(labels.numpy() == j)

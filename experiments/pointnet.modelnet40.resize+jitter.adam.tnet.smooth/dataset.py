@@ -77,10 +77,10 @@ def test_data_loader(config):
 if __name__ == '__main__':
     from config import config
 
-    train_data_loader = train_data_loader(config)
-    for i, (x, y) in enumerate(train_data_loader):
+    data_loader = train_data_loader(config)
+    for i, (x, y) in enumerate(data_loader):
         print(i, ': ', x.shape, y.shape)
 
-    test_data_loader = test_data_loader(config)
-    for i, (x, y) in enumerate(test_data_loader):
+    data_loader = test_data_loader(config)
+    for i, (x, y) in enumerate(data_loader):
         print(i, ': ', x.shape, y.shape)
