@@ -52,6 +52,8 @@ Note:
 # S3DIS
 
 The training settings follow the same setting as in ModelNet40.
+Each scene is divided into 1m x 1m blocks.
+Points are randomly sampled during training and all points are used during testing.
 
 | Model | #Points | OA@Area_5 | mIoU@Area_5 |
 | :--- | :---: | :---: | :---: |

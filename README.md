@@ -75,6 +75,7 @@ Please refer to [MODEL_ZOO.md](MODEL_ZOO.md) for details.
 - [pointnet](https://github.com/charlesq34/pointnet)
 - [pointnet2](https://github.com/charlesq34/pointnet2)
 - [Pointnet2_PyTorch](https://github.com/erikwijmans/Pointnet2_PyTorch)
+- [Pointnet_Pointnet2_pytorch](https://github.com/yanx27/Pointnet_Pointnet2_pytorch)
 - [dgcnn](https://github.com/WangYueFt/dgcnn)
 - [kaolin](https://github.com/NVIDIAGameWorks/kaolin)
 - [TorchSeg](https://github.com/ycszen/TorchSeg)
