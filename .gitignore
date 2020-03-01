@@ -5,6 +5,7 @@ vision3d/ext.cpython-37m-x86_64-linux-gnu.so
 vision3d/dist
 **/__pycache__
 .idea
+.vscode
 
 # exclude project files
 output
@@ -12,6 +13,7 @@ experiments/*
 vision3d/datasets/s3dis_v2.py
 vision3d/modules/interpcnn
 vision3d/modules/transformer
+vision3d/modules/experimental
 
 # include project files
 !experiments/pointnet.modelnet40.resize+jitter.sgd.smooth
@@ -24,6 +26,7 @@ vision3d/modules/transformer
 !experiments/pointnet2.shapenetpart.jitter.sgd.ssg.smooth
 !experiments/pointnet2.shapenetpart.jitter.sgd.msg.smooth
 !experiments/pointnet2.s3dis.rgb+loc.sgd.ssg.smooth
-!experiments/dgcnn.modelnet40.resize+jitter.sgd.max+avg.lrelu.smooth
-!experiments/dgcnn.shapenetpart.jitter.sgd.max+avg.lrelu.smooth
-
+!experiments/dgcnn.modelnet40.resize+jitter.sgd.max+avg.smooth
+!experiments/dgcnn.shapenetpart.jitter.sgd.max.smooth
+!experiments/dgcnn.s3dis.rgb+loc.sgd.max.smooth
+!experiments/pointcnn.modelnet40.resize+jitter.sgd.smooth

@@ -3,6 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
+from .. import geometry
 from . import functional as F
 from ...utils.pytorch_utils import create_conv1d_blocks, create_conv2d_blocks
 
@@ -17,8 +18,8 @@ class SetAbstractionModule(nn.Module):
         self.pointnet = nn.Sequential(OrderedDict(layers))
 
     def forward(self, points, features):
-        centroids = F.farthest_point_sampling_and_gather(points, self.num_centroid)
-        points, features = F.ball_query_and_group_gather(points, features, centroids, self.num_sample, self.radius)
+        centroids = geometry.functional.farthest_point_sampling_and_gather(points, self.num_centroid)
+        features = F.ball_query_and_group_gather(points, features, centroids, self.num_sample, self.radius)
         features = self.pointnet(features)
         features, _ = features.max(dim=3)
         return centroids, features
@@ -40,10 +41,10 @@ class MultiScaleSetAbstractionModule(nn.Module):
             self.pointnets.append(nn.Sequential(OrderedDict(layers)))
 
     def forward(self, points, features):
-        centroids = F.farthest_point_sampling_and_gather(points, self.num_centroid)
+        centroids = geometry.functional.farthest_point_sampling_and_gather(points, self.num_centroid)
         overall_features = []
         for i, (num_sample, radius) in enumerate(zip(self.num_samples, self.radii)):
-            _, current_features = F.ball_query_and_group_gather(points, features, centroids, num_sample, radius)
+            current_features = F.ball_query_and_group_gather(points, features, centroids, num_sample, radius)
             current_features = self.pointnets[i](current_features)
             current_features, _ = current_features.max(dim=3)
             overall_features.append(current_features)
@@ -93,10 +94,10 @@ class FeaturePropagationModule(nn.Module):
         if num_point2 == 1:
             features2 = features2.repeat(1, 1, num_point1)
         else:
-            dist2, indices = F.three_nearest_neighbors(points1, points2)
+            dist2, indices = geometry.functional.three_nearest_neighbors(points1, points2)
             weights = torch.div(1., dist2 + 1e-5)
             weights = weights / torch.sum(weights, dim=2, keepdim=True)
-            features2 = F.three_interpolate(features2, indices, weights)
+            features2 = geometry.functional.three_interpolate(features2, indices, weights)
         if features1 is not None:
             features1 = torch.cat([features1, features2], dim=1)
         else:

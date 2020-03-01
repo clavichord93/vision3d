@@ -33,14 +33,15 @@ def test_one_epoch(engine, data_loader, model, epoch):
     start_time = time.time()
 
     for i, batch in pbar:
-        points, labels, class_ids = batch
+        points, normals, labels, class_ids = batch
         points = points.cuda()
+        normals = normals.cuda()
         class_ids = class_ids.cuda()
 
         prepare_time = time.time() - start_time
 
         with torch.no_grad():
-            outputs = model(points, class_ids)
+            outputs = model(points, normals, class_ids)
             preds = outputs.argmax(dim=1).detach().cpu().numpy()
             labels = labels.cpu().numpy()
             class_ids = class_ids.cpu().numpy()

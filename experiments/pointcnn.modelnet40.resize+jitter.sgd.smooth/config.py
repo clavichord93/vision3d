@@ -5,7 +5,7 @@ import argparse
 from easydict import EasyDict as edict
 
 from vision3d.utils.python_utils import ensure_dir
-from vision3d.datasets import ShapeNetPartDataset as dataset
+from vision3d.datasets import ModelNet40Dataset as dataset
 
 config = edict()
 
@@ -20,7 +20,7 @@ config.output_dir = osp.join(config.root_dir, 'output', config.program_name)
 config.snapshot_dir = osp.join(config.output_dir, 'snapshots')
 config.logs_dir = osp.join(config.output_dir, 'logs')
 config.events_dir = osp.join(config.output_dir, 'events')
-config.data_root = '/data/ShapeNetPart/shapenetcore_partanno_segmentation_benchmark_v0_normal'
+config.data_root = '/data/ModelNet40/modelnet40_ply_hdf5_2048'
 
 ensure_dir(config.output_dir)
 ensure_dir(config.snapshot_dir)
@@ -30,24 +30,23 @@ ensure_dir(config.events_dir)
 # data
 config.num_class = dataset.num_class
 config.class_names = dataset.class_names
-config.num_part = dataset.num_part
-config.part_names = dataset.part_names
-config.class_id_to_part_ids = dataset.class_id_to_part_ids
-config.part_id_to_class_id = dataset.part_id_to_class_id
 
 # train config
-config.train_num_point = 2048
+config.train_num_point = 1024
 config.train_jitter_sigma = 0.01
+config.train_rescale_low = 0.8
+config.train_rescale_high = 1.2
 config.train_batch_size = 32
 config.train_num_worker = 8
 
 # test config
-config.test_batch_size = 1
+config.test_num_point = 1024
+config.test_batch_size = 32
 config.test_num_worker = 8
 
 # optim config
 config.learning_rate = 0.1
-config.eta_min = config.learning_rate * 1e-2
+config.eta_min = 1e-3
 config.momentum = 0.9
 config.weight_decay = 1e-4
 config.max_epoch = 250

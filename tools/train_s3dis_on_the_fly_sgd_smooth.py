@@ -9,7 +9,7 @@ import torch.optim as optim
 
 from vision3d.utils.metrics import AccuracyMeter, MeanIoUMeter, AverageMeter
 from vision3d.engine import Engine
-from vision3d.utils.pytorch_utils import SmoothCrossEntropyLoss
+from vision3d.utils.pytorch_utils import SmoothCrossEntropyLoss, CosineAnnealingFunction
 from dataset import train_data_loader
 from config import config
 from model import create_model
@@ -17,7 +17,7 @@ from model import create_model
 
 def make_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test_area', metavar='D', required=True, help='area for testing')
+    parser.add_argument('--test_area', metavar='D', type=int, required=True, help='area for testing')
     parser.add_argument('--steps', metavar='N', type=int, default=10, help='iteration steps for logging')
     parser.add_argument('--tensorboardx', action='store_true', help='use tensorboardX')
     return parser
@@ -32,14 +32,14 @@ def train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler,
     start_time = time.time()
 
     for i, batch in enumerate(data_loader):
-        points, extras, labels = batch
+        points, features, labels = batch
         points = points.cuda()
-        extras = extras.cuda()
+        features = features.cuda()
         labels = labels.cuda()
 
         prepare_time = time.time() - start_time
 
-        outputs = model(points, extras)
+        outputs = model(points, features)
         loss = loss_func(outputs, labels)
         loss_val = loss.item()
 
@@ -104,13 +104,10 @@ def main():
         if engine.snapshot is not None:
             engine.load_snapshot(engine.snapshot)
 
-        last_epoch = engine.state.epoch
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,
-                                                         config.max_epoch,
-                                                         eta_min=config.eta_min,
-                                                         last_epoch=last_epoch)
+        cosine_annealing_fn = CosineAnnealingFunction(config.max_epoch, eta_min=config.eta_min)
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, cosine_annealing_fn, last_epoch=engine.state.epoch)
 
-        for epoch in range(last_epoch + 1, config.max_epoch):
+        for epoch in range(engine.state.epoch + 1, config.max_epoch):
             train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler, epoch)
 
 

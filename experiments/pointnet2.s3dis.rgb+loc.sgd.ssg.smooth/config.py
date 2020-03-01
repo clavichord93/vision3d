@@ -50,7 +50,7 @@ config.test_normalized_location = True
 
 # optim config
 config.learning_rate = 0.1
-config.eta_min = config.learning_rate * 1e-2
+config.eta_min = 1e-3
 config.momentum = 0.9
 config.weight_decay = 1e-4
 config.max_epoch = 250

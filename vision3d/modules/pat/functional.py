@@ -3,16 +3,14 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from ..pointnet2 import functional as F
-from ...utils.pytorch_utils import k_nearest_neighbors
-
+from .. import geometry
 
 __all__ = [
     'create_pat_conv1d_blocks',
     'create_pat_conv2d_blocks',
     'create_pat_linear_blocks',
     'k_nearest_neighbors_graph',
-    'farthest_sampling_and_gather'
+    'farthest_point_sampling_and_gather'
 ]
 
 
@@ -63,21 +61,24 @@ def create_pat_linear_blocks(input_dim, output_dims, groups, dropout=None):
 
 def k_nearest_neighbors_graph(points, num_neighbor, dilation=1, training=True, ignore_nearest=True):
     num_neighbor_dilated = num_neighbor * dilation + int(ignore_nearest)
-    _, indices = k_nearest_neighbors(points, points, num_neighbor_dilated)
-    if ignore_nearest:
-        indices = indices[:, :, 1:]
-    if dilation > 1 and training:
-        device = points.device
-        sample_indices = torch.randperm(num_neighbor_dilated)[:num_neighbor].to(device)
-        indices = indices.index_select(dim=2, index=sample_indices)
-    indices = indices.contiguous()
-    points = F.group_gather_by_index(points, indices)
+    indices = geometry.functional.k_nearest_neighbors(points, points, num_neighbor_dilated)
+    start_index = 1 if ignore_nearest else 0
+    # if dilation > 1 and training:
+    #     device = points.device
+    #     sample_indices = torch.randperm(num_neighbor_dilated)[:num_neighbor].to(device)
+    #     indices = indices.index_select(dim=2, index=sample_indices)
+    # indices = indices.contiguous()
+    if training:
+        indices = indices[:, :, start_index::dilation].contiguous()
+    else:
+        indices = indices[:, :, start_index:].contiguous()
+    points = geometry.functional.group_gather(points, indices)
     return points
 
 
-def farthest_sampling_and_gather(points, features, num_sample):
-    indices = F.farthest_point_sampling(points, num_sample)
-    points = F.gather_by_index(points, indices)
+def farthest_point_sampling_and_gather(points, features, num_sample):
+    indices = geometry.functional.farthest_point_sampling(points, num_sample)
+    points = geometry.functional.gather(points, indices)
     if features is not None:
-        features = F.gather_by_index(features, indices)
+        features = geometry.functional.gather(features, indices)
     return points, features

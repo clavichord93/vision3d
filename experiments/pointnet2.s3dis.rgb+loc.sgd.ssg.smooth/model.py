@@ -3,7 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from vision3d.modules.pointnet2 import SetAbstractionModule, GlobalAbstractionModule, FeaturePropagationModule
+from vision3d.modules.pointnet2 import SetAbstractionModule, FeaturePropagationModule
 from vision3d.utils.pytorch_utils import create_conv1d_blocks
 
 

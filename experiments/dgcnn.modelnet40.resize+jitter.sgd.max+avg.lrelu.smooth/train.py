@@ -1,1 +1,0 @@
-../../tools/train_modelnet40_sgd_smooth.py

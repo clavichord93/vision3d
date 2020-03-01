@@ -10,6 +10,7 @@ import torch.optim as optim
 from vision3d.utils.metrics import AccuracyMeter, AverageMeter
 from vision3d.engine import Engine
 from vision3d.modules.pointnet import PointNetLoss
+from vision3d.utils.pytorch_utils import CosineAnnealingFunction
 from dataset import train_data_loader
 from config import config
 from model import create_model
@@ -106,13 +107,10 @@ def main():
         if engine.snapshot is not None:
             engine.load_snapshot(engine.snapshot)
 
-        last_epoch = engine.state.epoch
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,
-                                                         config.max_epoch,
-                                                         eta_min=config.eta_min,
-                                                         last_epoch=last_epoch)
+        cosine_annealing_fn = CosineAnnealingFunction(config.max_epoch, eta_min=config.eta_min)
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, cosine_annealing_fn, last_epoch=engine.state.epoch)
 
-        for epoch in range(last_epoch + 1, config.max_epoch):
+        for epoch in range(engine.state.epoch + 1, config.max_epoch):
             train_one_epoch(engine, data_loader, model, loss_func, optimizer, scheduler, epoch)
 
 

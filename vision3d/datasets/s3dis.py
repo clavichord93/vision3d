@@ -1,6 +1,5 @@
 import os
 import os.path as osp
-from os import path as osp
 
 import numpy as np
 import torch
@@ -128,7 +127,8 @@ class S3DISDataset(_S3DISDatasetBase):
         if self.normalized_location:
             normalized_locations = points / scene_size
             features = np.concatenate([features, normalized_locations], axis=1)
-        points[:, :2] = points[:, :2] - center
+        barycenter = np.mean(points[:, :2], axis=0)
+        points[:, :2] = points[:, :2] - barycenter
         labels = labels[indices]
 
         points, features, labels = self.transform(points, features, labels)
@@ -240,17 +240,6 @@ class S3DISWholeSceneDataset(_S3DISDatasetBase):
             self.scene_sizes.append(scene_size)
         self.length = len(self.points_list)
 
-    def _save_hdf5(self, scene_name, points, features, point_indices, labels):
-        print('Saving {}...'.format(scene_name))
-        h5file = h5py.File(osp.join(self.data_root, '..', 's3dis_testing_all_hdf5', scene_name + '.h5'))
-        h5file.create_dataset('points', data=points, compression='gzip', dtype=points.dtype)
-        h5file.create_dataset('features', data=features, compression='gzip', dtype=features.dtype)
-        h5file.create_dataset('point_indices', data=point_indices, compression='gzip', dtype=point_indices.dtype)
-        h5file.create_dataset('labels', data=labels, compression='gzip', dtype=labels.dtype)
-        print('{} saved.'.format(scene_name))
-        print(points.shape, features.shape, point_indices.shape, labels.shape)
-        h5file.close()
-
     def _find_nearest_block(self, points, barycenter, points_list, barycenters):
         num_block = len(points_list)
         best_dist2 = np.inf
@@ -350,12 +339,6 @@ class S3DISWholeSceneDataset(_S3DISDatasetBase):
         batch_features_list = np.stack(batch_features_list, axis=0)
         batch_point_indices_list = np.stack(batch_point_indices_list, axis=0)
 
-        # _save_hdf5(self.scene_names[index],
-        #            batch_points_list,
-        #            batch_features_list,
-        #            batch_point_indices_list,
-        #            labels)
-
         batch_points_list, batch_features_list, batch_point_indices_list, labels = \
             self.transform(batch_points_list, batch_features_list, batch_point_indices_list, labels)
 
@@ -411,17 +394,3 @@ class S3DISWholeSceneHdf5Dataset(_S3DISDatasetBase):
 
     def __len__(self):
         return self.num_scene
-
-
-if __name__ == '__main__':
-    # pre-process testing hdf5 files
-    data_root = '/data/S3DIS/stanford_indoor3d'
-
-    def transform(*inputs):
-        return inputs
-
-    for test_area in range(1, 7):
-        dataset = S3DISWholeSceneDataset(data_root, transform, test_area=test_area)
-        num_scene = len(dataset)
-        for i in range(num_scene):
-            scene = dataset[i]

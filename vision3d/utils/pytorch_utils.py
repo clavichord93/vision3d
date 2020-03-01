@@ -1,4 +1,4 @@
-from collections import OrderedDict
+import math
 
 import numpy as np
 import torch
@@ -10,6 +10,29 @@ def reset_numpy_random_seed(worker_id):
     seed = torch.initial_seed() % (2 ** 32)
     # print(worker_id, seed)
     np.random.seed(seed)
+
+
+class CosineAnnealingFunction(object):
+    def __init__(self, max_epoch, eta_min=0):
+        self.max_epoch = max_epoch
+        self.eta_min = eta_min
+
+    def __call__(self, last_epoch):
+        return self.eta_min + (1 - self.eta_min) * (1 + math.cos(math.pi * last_epoch / self.max_epoch)) / 2
+
+
+class SmoothCrossEntropyLoss(nn.Module):
+    def __init__(self, eps=0.1):
+        super(SmoothCrossEntropyLoss, self).__init__()
+        self.eps = eps
+
+    def forward(self, preds, labels):
+        device = preds.device
+        one_hot = torch.zeros_like(preds).to(device).scatter(1, labels.unsqueeze(1), 1)
+        labels = one_hot * (1 - self.eps) + self.eps / preds.shape[1]
+        log_probs = F.log_softmax(preds, dim=1)
+        loss = -(labels * log_probs).sum(dim=1).mean()
+        return loss
 
 
 def _get_activation_fn(activation_fn, **kwargs):
@@ -29,21 +52,7 @@ def _get_activation_fn(activation_fn, **kwargs):
         raise ValueError('Activation function {} is not supported'.format(activation_fn))
 
 
-class SmoothCrossEntropyLoss(nn.Module):
-    def __init__(self, eps=0.2):
-        super(SmoothCrossEntropyLoss, self).__init__()
-        self.eps = eps
-
-    def forward(self, preds, labels):
-        device = preds.device
-        one_hot = torch.zeros_like(preds).to(device).scatter(1, labels.unsqueeze(1), 1)
-        labels = one_hot * (1 - self.eps) + self.eps / preds.shape[1]
-        log_probs = F.log_softmax(preds, dim=1)
-        loss = -(labels * log_probs).sum(dim=1).mean()
-        return loss
-
-
-class ConvUnit1d(nn.Sequential):
+class ConvBlock1d(nn.Sequential):
     def __init__(self,
                  input_dim,
                  output_dim,
@@ -53,33 +62,37 @@ class ConvUnit1d(nn.Sequential):
                  dilation=1,
                  groups=1,
                  batch_norm=True,
+                 batch_norm_after_activation=False,
                  activation='relu',
                  dropout=None,
                  **kwargs):
-        super(ConvUnit1d, self).__init__()
+        super(ConvBlock1d, self).__init__()
         bias = not batch_norm
-        self.add_module('conv',
-                        nn.Conv1d(input_dim,
-                                  output_dim,
-                                  kernel_size=kernel_size,
-                                  stride=stride,
-                                  padding=padding,
-                                  dilation=dilation,
-                                  groups=groups,
-                                  bias=bias))
+        layers = []
+        layers.append(('conv', nn.Conv1d(input_dim,
+                                         output_dim,
+                                         kernel_size=kernel_size,
+                                         stride=stride,
+                                         padding=padding,
+                                         dilation=dilation,
+                                         groups=groups,
+                                         bias=bias)))
         if batch_norm:
-            self.add_module('bn', nn.BatchNorm1d(output_dim))
+            layers.append(('bn', nn.BatchNorm1d(output_dim)))
         if activation is not None:
-            activation_fn = _get_activation_fn(activation, **kwargs)
-            self.add_module(activation, activation_fn)
+            layers.append((activation, _get_activation_fn(activation, **kwargs)))
+        if batch_norm and activation is not None and batch_norm_after_activation:
+            layers[-2], layers[-1] = layers[-1], layers[-2]
         if dropout is not None:
-            self.add_module('dp', nn.Dropout(dropout))
+            layers.append(('dp', nn.Dropout(dropout)))
+        for name, module in layers:
+            self.add_module(name, module)
     
     def forward(self, inputs):
-        return super(ConvUnit1d, self).forward(inputs)
+        return super(ConvBlock1d, self).forward(inputs)
 
 
-class ConvUnit2d(nn.Sequential):
+class ConvBlock2d(nn.Sequential):
     def __init__(self,
                  input_dim,
                  output_dim,
@@ -89,53 +102,62 @@ class ConvUnit2d(nn.Sequential):
                  dilation=1,
                  groups=1,
                  batch_norm=True,
+                 batch_norm_after_activation=False,
                  activation='relu',
                  dropout=None,
                  **kwargs):
-        super(ConvUnit2d, self).__init__()
+        super(ConvBlock2d, self).__init__()
         bias = not batch_norm
-        self.add_module('conv',
-                        nn.Conv2d(input_dim,
-                                  output_dim,
-                                  kernel_size=kernel_size,
-                                  stride=stride,
-                                  padding=padding,
-                                  dilation=dilation,
-                                  groups=groups,
-                                  bias=bias))
+        layers = []
+        layers.append(('conv', nn.Conv2d(input_dim,
+                                         output_dim,
+                                         kernel_size=kernel_size,
+                                         stride=stride,
+                                         padding=padding,
+                                         dilation=dilation,
+                                         groups=groups,
+                                         bias=bias)))
         if batch_norm:
-            self.add_module('bn', nn.BatchNorm2d(output_dim))
+            layers.append(('bn', nn.BatchNorm2d(output_dim)))
         if activation is not None:
-            activation_fn = _get_activation_fn(activation, **kwargs)
-            self.add_module(activation, activation_fn)
+            layers.append((activation, _get_activation_fn(activation, **kwargs)))
+        if batch_norm and activation is not None and batch_norm_after_activation:
+            layers[-2], layers[-1] = layers[-1], layers[-2]
         if dropout is not None:
-            self.add_module('dp', nn.Dropout(dropout))
+            layers.append(('dp', nn.Dropout(dropout)))
+        for name, module in layers:
+            self.add_module(name, module)
 
     def forward(self, inputs):
-        return super(ConvUnit2d, self).forward(inputs)
+        return super(ConvBlock2d, self).forward(inputs)
 
 
-class LinearUnit(nn.Sequential):
+class LinearBlock(nn.Sequential):
     def __init__(self,
                  input_dim,
                  output_dim,
                  batch_norm=True,
+                 batch_norm_after_activation=False,
                  activation='relu',
                  dropout=None,
                  **kwargs):
-        super(LinearUnit, self).__init__()
+        super(LinearBlock, self).__init__()
         bias = not batch_norm
-        self.add_module('fc', nn.Linear(input_dim, output_dim, bias=bias))
+        layers = []
+        layers.append(('fc', nn.Linear(input_dim, output_dim, bias=bias)))
         if batch_norm:
-            self.add_module('bn', nn.BatchNorm1d(output_dim))
+            layers.append(('bn', nn.BatchNorm1d(output_dim)))
         if activation is not None:
-            activation_fn = _get_activation_fn(activation, **kwargs)
-            self.add_module(activation, activation_fn)
+            layers.append((activation, _get_activation_fn(activation, **kwargs)))
+        if batch_norm and activation is not None and batch_norm_after_activation:
+            layers[-2], layers[-1] = layers[-1], layers[-2]
         if dropout is not None:
-            self.add_module('dp', nn.Dropout(dropout))
+            layers.append(('dp', nn.Dropout(dropout)))
+        for name, module in layers:
+            self.add_module(name, module)
 
     def forward(self, inputs):
-        return super(LinearUnit, self).forward(inputs)
+        return super(LinearBlock, self).forward(inputs)
 
 
 def create_conv1d_blocks(input_dim,
@@ -146,26 +168,59 @@ def create_conv1d_blocks(input_dim,
                          dilation=1,
                          groups=1,
                          batch_norm=True,
+                         batch_norm_after_activation=False,
                          activation='relu',
                          dropout=None,
+                         start_index=1,
                          **kwargs):
+    r"""
+    Create a list of ConvBlock1d. The name of the i-th ConvBlock1d is `conv{i+start_index}`.
+
+    :param input_dim: int
+        The number of the input channels.
+    :param output_dims: list of int or int
+        If `output_dims` is a list of int, it represents the numbers of the output channels in each ConvBlock1d.
+        If `output_dims` is a int, it means there is only one ConvBlock1d.
+    :param kernel_size: int
+        The kernel size in convolution.
+    :param stride: int
+        The stride in convolution.
+    :param padding: int
+        The padding in convolution.
+    :param dilation: int
+        The dilation in convolution.
+    :param groups: int
+        The groups in convolution.
+    :param batch_norm: bool
+        Whether batch normalization is used or not.
+    :param batch_norm_after_activation: bool
+        If True, every ConvBlock1d is in the order of [Conv1d, Activation_Fn, BatchNorm1d].
+        If False, every ConvBlock1d is in the order of [Conv1d, BatchNorm1d, Activation_Fn].
+    :param activation: str
+        The name of the activation function in each ConvBlock1d.
+    :param dropout: None or float
+        If None, no dropout is used.
+        If a float, the dropout probability in each ConvBlock1d. The Dropout is used at the end of each ConvBlock1d.
+    :param start_index: int
+        The index used in the name of the first ConvBlock1d.
+    """
     if isinstance(output_dims, int):
         output_dims = [output_dims]
     layers = []
     for i, output_dim in enumerate(output_dims):
-        index = str(i + 1)
-        layers.append(('conv' + index,
-                       ConvUnit1d(input_dim,
-                                  output_dim,
-                                  kernel_size=kernel_size,
-                                  stride=stride,
-                                  padding=padding,
-                                  dilation=dilation,
-                                  groups=groups,
-                                  batch_norm=batch_norm,
-                                  activation=activation,
-                                  dropout=dropout,
-                                  **kwargs)))
+        layers.append(('conv{}'.format(start_index + i),
+                       ConvBlock1d(input_dim,
+                                   output_dim,
+                                   kernel_size=kernel_size,
+                                   stride=stride,
+                                   padding=padding,
+                                   dilation=dilation,
+                                   groups=groups,
+                                   batch_norm=batch_norm,
+                                   batch_norm_after_activation=batch_norm_after_activation,
+                                   activation=activation,
+                                   dropout=dropout,
+                                   **kwargs)))
         input_dim = output_dim
     return layers
 
@@ -178,26 +233,59 @@ def create_conv2d_blocks(input_dim,
                          dilation=1,
                          groups=1,
                          batch_norm=True,
+                         batch_norm_after_activation=False,
                          activation='relu',
                          dropout=None,
+                         start_index=1,
                          **kwargs):
+    r"""
+    Create a list of ConvBlock2d. The name of the i-th ConvBlock2d is `conv{i+start_index}`.
+
+    :param input_dim: int
+        The number of the input channels.
+    :param output_dims: list of int or int
+        If `output_dims` is a list of int, it represents the numbers of the output channels in each ConvBlock2d.
+        If `output_dims` is a int, it means there is only one ConvBlock2d.
+    :param kernel_size: int
+        The kernel size in convolution.
+    :param stride: int
+        The stride in convolution.
+    :param padding: int
+        The padding in convolution.
+    :param dilation: int
+        The dilation in convolution.
+    :param groups: int
+        The groups in convolution.
+    :param batch_norm: bool
+        Whether batch normalization is used or not.
+    :param batch_norm_after_activation: bool
+        If True, every ConvBlock2d is in the order of [Conv2d, Activation_Fn, BatchNorm2d].
+        If False, every ConvBlock2d is in the order of [Conv2d, BatchNorm2d, Activation_Fn].
+    :param activation: str
+        The name of the activation function in each ConvBlock2d.
+    :param dropout: None or float
+        If None, no dropout is used.
+        If a float, the dropout probability in each ConvBlock2d. The Dropout is used at the end of each ConvBlock2d.
+    :param start_index: int
+        The index used in the name of the first ConvBlock2d.
+    """
     if isinstance(output_dims, int):
         output_dims = [output_dims]
     layers = []
     for i, output_dim in enumerate(output_dims):
-        index = str(i + 1)
-        layers.append(('conv' + index,
-                       ConvUnit2d(input_dim,
-                                  output_dim,
-                                  kernel_size=kernel_size,
-                                  stride=stride,
-                                  padding=padding,
-                                  dilation=dilation,
-                                  groups=groups,
-                                  batch_norm=batch_norm,
-                                  activation=activation,
-                                  dropout=dropout,
-                                  **kwargs)))
+        layers.append(('conv{}'.format(start_index + i),
+                       ConvBlock2d(input_dim,
+                                   output_dim,
+                                   kernel_size=kernel_size,
+                                   stride=stride,
+                                   padding=padding,
+                                   dilation=dilation,
+                                   groups=groups,
+                                   batch_norm=batch_norm,
+                                   batch_norm_after_activation=batch_norm_after_activation,
+                                   activation=activation,
+                                   dropout=dropout,
+                                   **kwargs)))
         input_dim = output_dim
     return layers
 
@@ -205,46 +293,225 @@ def create_conv2d_blocks(input_dim,
 def create_linear_blocks(input_dim,
                          output_dims,
                          batch_norm=True,
+                         batch_norm_after_activation=False,
                          activation='relu',
                          dropout=None,
+                         start_index=1,
                          **kwargs):
+    r"""
+    Create a list of LinearBlock. The name of the i-th LinearBlock is `conv{i+start_index}`.
+
+    :param input_dim: int
+        The number of the input channels.
+    :param output_dims: list of int or int
+        If `output_dims` is a list of int, it represents the numbers of the output channels in each LinearBlock.
+        If `output_dims` is a int, it means there is only one LinearBlock.
+    :param batch_norm: bool
+        Whether batch normalization is used or not.
+    :param batch_norm_after_activation: bool
+        If True, every LinearBlock is in the order of [Conv2d, Activation_Fn, BatchNorm2d].
+        If False, every LinearBlock is in the order of [Conv2d, BatchNorm2d, Activation_Fn].
+    :param activation: str
+        The name of the activation function in each LinearBlock.
+    :param dropout: None or float
+        If None, no dropout is used.
+        If a float, the dropout probability in each LinearBlock. The Dropout is used at the end of each LinearBlock.
+    :param start_index: int
+        The index used in the name of the first LinearBlock.
+    """
     if isinstance(output_dims, int):
         output_dims = [output_dims]
     layers = []
     for i, output_dim in enumerate(output_dims):
-        index = str(i + 1)
-        layers.append(('fc' + index,
-                       LinearUnit(input_dim,
-                                  output_dim,
-                                  batch_norm=batch_norm,
-                                  activation=activation,
-                                  dropout=dropout,
-                                  **kwargs)))
+        layers.append(('fc{}'.format(start_index + i),
+                       LinearBlock(input_dim,
+                                   output_dim,
+                                   batch_norm=batch_norm,
+                                   batch_norm_after_activation=batch_norm_after_activation,
+                                   activation=activation,
+                                   dropout=dropout,
+                                   **kwargs)))
         input_dim = output_dim
     return layers
 
 
-def k_nearest_neighbors(points, centroids, num_neighbor):
-    r"""
-    Compute the kNNs of the points in `centroids` from the points in `points`.
+class DepthwiseConv1d(nn.Sequential):
+    def __init__(self,
+                 input_dim,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 depth_multiplier=1,
+                 batch_norm=True,
+                 batch_norm_after_activation=False,
+                 activation='relu',
+                 dropout=None,
+                 **kwargs):
+        super(DepthwiseConv1d, self).__init__()
 
-    Note: This implementation decomposes uses less memory than the naive implementation:
-    `pairwise_dist2 = torch.sum((centroids.unsqueeze(3) - points.unsqueeze(2)) ** 2, dim=1)`
+        if not isinstance(depth_multiplier, int) or depth_multiplier <= 0:
+            raise ValueError('`depth_multiplier ({}) must be a positive integer.'.format(depth_multiplier))
 
-    :param points: torch.Tensor (batch_size, num_feature, num_point)
-        The features/coordinates of the points from which the kNNs are computed.
-    :param centroids: torch.Tensor (batch_size, num_feature, num_centroid)
-        The features/coordinates of the centroid points whose kNNs are computed.
-    :param num_neighbor: int
-        The number of nearest neighbors to compute.
-    :return dist2: torch.Tensor(batch_size, num_points1, k)
-        The squared distance of the kNNs of the centroids.
-    :return indices: torch.Tensor(batch_size, num_points1, k)
-        The indices of the kNNs of the centroids.
-    """
-    a2 = torch.sum(centroids ** 2, dim=1).unsqueeze(2)
-    ab = torch.matmul(centroids.transpose(1, 2), points)
-    b2 = torch.sum(points ** 2, dim=1).unsqueeze(1)
-    pairwise_dist2 = a2 - 2 * ab + b2
-    dist2, indices = pairwise_dist2.topk(num_neighbor, dim=2, largest=False)
-    return dist2, indices
+        bias = not batch_norm
+        output_dim = input_dim * depth_multiplier
+
+        layers = []
+        layers.append(('conv', nn.Conv1d(input_dim,
+                                         output_dim,
+                                         kernel_size=kernel_size,
+                                         stride=stride,
+                                         padding=padding,
+                                         dilation=dilation,
+                                         groups=input_dim,
+                                         bias=bias)))
+        if batch_norm:
+            layers.append(('bn', nn.BatchNorm1d(output_dim)))
+        if activation is not None:
+            layers.append((activation, _get_activation_fn(activation, **kwargs)))
+        if batch_norm and activation is not None and batch_norm_after_activation:
+            layers[-2], layers[-1] = layers[-1], layers[-2]
+        if dropout is not None:
+            layers.append(('dp', nn.Dropout(dropout)))
+        for name, module in layers:
+            self.add_module(name, module)
+
+    def forward(self, inputs):
+        return super(DepthwiseConv1d, self).forward(inputs)
+
+
+class DepthwiseConv2d(nn.Sequential):
+    def __init__(self,
+                 input_dim,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 depth_multiplier=1,
+                 batch_norm=True,
+                 batch_norm_after_activation=False,
+                 activation='relu',
+                 dropout=None,
+                 **kwargs):
+        super(DepthwiseConv2d, self).__init__()
+
+        if not isinstance(depth_multiplier, int) or depth_multiplier <= 0:
+            raise ValueError('`depth_multiplier ({}) must be a positive integer.'.format(depth_multiplier))
+
+        bias = not batch_norm
+        output_dim = input_dim * depth_multiplier
+
+        layers = []
+        layers.append(('conv', nn.Conv2d(input_dim,
+                                         output_dim,
+                                         kernel_size=kernel_size,
+                                         stride=stride,
+                                         padding=padding,
+                                         dilation=dilation,
+                                         groups=input_dim,
+                                         bias=bias)))
+        if batch_norm:
+            layers.append(('bn', nn.BatchNorm2d(output_dim)))
+        if activation is not None:
+            layers.append((activation, _get_activation_fn(activation, **kwargs)))
+        if batch_norm and activation is not None and batch_norm_after_activation:
+            layers[-2], layers[-1] = layers[-1], layers[-2]
+        if dropout is not None:
+            layers.append(('dp', nn.Dropout(dropout)))
+        for name, module in layers:
+            self.add_module(name, module)
+
+    def forward(self, inputs):
+        return super(DepthwiseConv2d, self).forward(inputs)
+
+
+class SeparableConv1d(nn.Sequential):
+    def __init__(self,
+                 input_dim,
+                 output_dim,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 depth_multiplier=1,
+                 batch_norm=True,
+                 batch_norm_after_activation=False,
+                 activation='relu',
+                 dropout=None,
+                 **kwargs):
+        super(SeparableConv1d, self).__init__()
+
+        if not isinstance(depth_multiplier, int) or depth_multiplier <= 0:
+            raise ValueError('`depth_multiplier ({}) must be a positive integer.'.format(depth_multiplier))
+
+        bias = not batch_norm
+        hidden_dim = input_dim * depth_multiplier
+
+        layers = []
+        layers.append(('dwconv', nn.Conv1d(input_dim,
+                                           hidden_dim,
+                                           kernel_size=kernel_size,
+                                           stride=stride,
+                                           padding=padding,
+                                           dilation=dilation,
+                                           groups=input_dim)))
+        layers.append(('pwconv', nn.Conv1d(hidden_dim, output_dim, kernel_size=1, bias=bias)))
+        if batch_norm:
+            layers.append(('bn', nn.BatchNorm1d(output_dim)))
+        if activation is not None:
+            layers.append((activation, _get_activation_fn(activation, **kwargs)))
+        if batch_norm and activation is not None and batch_norm_after_activation:
+            layers[-2], layers[-1] = layers[-1], layers[-2]
+        if dropout is not None:
+            layers.append(('dp', nn.Dropout(dropout)))
+        for name, module in layers:
+            self.add_module(name, module)
+
+    def forward(self, inputs):
+        return super(SeparableConv1d, self).forward(inputs)
+
+
+class SeparableConv2d(nn.Sequential):
+    def __init__(self,
+                 input_dim,
+                 output_dim,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 depth_multiplier=1,
+                 batch_norm=True,
+                 batch_norm_after_activation=False,
+                 activation='relu',
+                 dropout=None,
+                 **kwargs):
+        super(SeparableConv2d, self).__init__()
+
+        if not isinstance(depth_multiplier, int) or depth_multiplier <= 0:
+            raise ValueError('`depth_multiplier ({}) must be a positive integer.'.format(depth_multiplier))
+
+        bias = not batch_norm
+        hidden_dim = input_dim * depth_multiplier
+
+        layers = []
+        layers.append(('dwconv', nn.Conv2d(input_dim,
+                                           hidden_dim,
+                                           kernel_size=kernel_size,
+                                           stride=stride,
+                                           padding=padding,
+                                           dilation=dilation,
+                                           groups=input_dim)))
+        layers.append(('pwconv', nn.Conv2d(hidden_dim, output_dim, kernel_size=1, bias=bias)))
+        if batch_norm:
+            layers.append(('bn', nn.BatchNorm2d(output_dim)))
+        if activation is not None:
+            layers.append((activation, _get_activation_fn(activation, **kwargs)))
+        if batch_norm and activation is not None and batch_norm_after_activation:
+            layers[-2], layers[-1] = layers[-1], layers[-2]
+        if dropout is not None:
+            layers.append(('dp', nn.Dropout(dropout)))
+        for name, module in layers:
+            self.add_module(name, module)
+
+    def forward(self, inputs):
+        return super(SeparableConv2d, self).forward(inputs)

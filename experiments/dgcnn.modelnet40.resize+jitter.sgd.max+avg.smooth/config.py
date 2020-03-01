@@ -20,7 +20,7 @@ config.output_dir = osp.join(config.root_dir, 'output', config.program_name)
 config.snapshot_dir = osp.join(config.output_dir, 'snapshots')
 config.logs_dir = osp.join(config.output_dir, 'logs')
 config.events_dir = osp.join(config.output_dir, 'events')
-config.data_root = '/data/ModelNet40/modelnet40_normal_resampled_ply_hdf5_2048'
+config.data_root = '/data/ModelNet40/modelnet40_ply_hdf5_2048'
 
 ensure_dir(config.output_dir)
 ensure_dir(config.snapshot_dir)
@@ -46,7 +46,7 @@ config.test_num_worker = 8
 
 # optim config
 config.learning_rate = 0.1
-config.eta_min = config.learning_rate * 1e-2
+config.eta_min = 1e-3
 config.momentum = 0.9
 config.weight_decay = 1e-4
 config.max_epoch = 250

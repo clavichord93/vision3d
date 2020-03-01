@@ -30,7 +30,7 @@ class PointNet2(nn.Module):
             num_samples=[64, 128],
             radii=[0.4, 0.8]
         )
-        self.g_sa_module = GlobalAbstractionModule(input_dim=515, output_dims=[256, 512, 1024])
+        self.gsa_module = GlobalAbstractionModule(input_dim=515, output_dims=[256, 512, 1024])
 
         # FP module
         self.fp_module1 = FeaturePropagationModule(input_dim=1536, output_dims=[256, 256])
@@ -49,7 +49,7 @@ class PointNet2(nn.Module):
         # backbone
         points1, features1 = self.ms_sa_module1(points, features)
         points2, features2 = self.ms_sa_module2(points1, features1)
-        points3, features3 = self.g_sa_module(points2, features2)
+        points3, features3 = self.gsa_module(points2, features2)
 
         features2 = self.fp_module1(points2, features2, points3, features3)
         features1 = self.fp_module2(points1, features1, points2, features2)

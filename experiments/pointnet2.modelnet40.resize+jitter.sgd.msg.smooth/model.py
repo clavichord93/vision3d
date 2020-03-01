@@ -26,7 +26,7 @@ class PointNet2(nn.Module):
             num_samples=[32, 64, 128],
             radii=[0.2, 0.4, 0.8]
         )
-        self.g_sa_module = GlobalAbstractionModule(input_dim=643, output_dims=[256, 512, 1024])
+        self.gsa_module = GlobalAbstractionModule(input_dim=643, output_dims=[256, 512, 1024])
 
         # classifier
         layers = create_linear_blocks(1024, [512, 256], dropout=0.5)
@@ -37,7 +37,7 @@ class PointNet2(nn.Module):
         # backbone
         points, features = self.ms_sa_module1(points, None)
         points, features = self.ms_sa_module2(points, features)
-        points, features = self.g_sa_module(points, features)
+        points, features = self.gsa_module(points, features)
 
         # classifier
         features = features.squeeze(dim=2)
